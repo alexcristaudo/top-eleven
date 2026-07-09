@@ -2,7 +2,7 @@
 import { DRILLS, DRILL_CATEGORIES, INTENSITY } from '../data/drills.js';
 import { POSITIONS, ROLES } from '../data/roles.js';
 import { attrLabel } from '../data/attributes.js';
-import { recommendDrills, needsForPosition, needsFromWeaknesses, weaknessReport } from '../logic/analysis.js';
+import { recommendDrills, needsForPosition, needsFromWeaknesses, weaknessReport, conditionPlan } from '../logic/analysis.js';
 import { getPlayers } from '../store.js';
 import { esc } from './ui.js';
 
@@ -30,6 +30,23 @@ export function renderTraining(view) {
         </label>
       </div>
       <div id="session-out"></div>
+    </div>
+
+    <div class="card">
+      <h3>Condition planner</h3>
+      <p class="hint">Condition regenerates on a 15-minute tick (~5% per tick); a green pack restores ~15%. Plan whether a player is match-ready without wasting packs.</p>
+      <div class="field-row">
+        <label class="field"><span>Current condition: <b id="cond-val">65</b>%</span>
+          <input type="range" id="cond-current" min="0" max="100" step="5" value="65">
+        </label>
+        <label class="field"><span>Kickoff in (hours): <b id="hours-val">3</b></span>
+          <input type="range" id="cond-hours" min="0" max="12" step="0.5" value="3">
+        </label>
+      </div>
+      <label class="field"><span>Target at kickoff: <b id="target-val">90</b>%</span>
+        <input type="range" id="cond-target" min="70" max="100" step="5" value="90">
+      </label>
+      <div id="cond-out"></div>
     </div>
 
     <div class="card">
@@ -103,4 +120,23 @@ export function renderTraining(view) {
   targetEl.addEventListener('change', build);
   budgetEl.addEventListener('input', build);
   build();
+
+  const condIn = view.querySelector('#cond-current');
+  const hoursIn = view.querySelector('#cond-hours');
+  const targetIn = view.querySelector('#cond-target');
+  const condOut = view.querySelector('#cond-out');
+  function drawCondition() {
+    const current = parseInt(condIn.value, 10);
+    const hours = parseFloat(hoursIn.value);
+    const target = parseInt(targetIn.value, 10);
+    view.querySelector('#cond-val').textContent = current;
+    view.querySelector('#hours-val').textContent = hours;
+    view.querySelector('#target-val').textContent = target;
+    const plan = conditionPlan({ current, minutesUntilMatch: hours * 60, target });
+    condOut.innerHTML = plan.ready
+      ? `<div class="note">✅ Match-ready without packs: natural regeneration reaches <strong>${plan.atKickoff}%</strong> by kickoff${plan.minutesToTarget > 0 ? ` (hits ${target}% in ~${plan.minutesToTarget >= 60 ? (plan.minutesToTarget / 60).toFixed(1) + ' h' : plan.minutesToTarget + ' min'})` : ''}. Save your greens.</div>`
+      : `<div class="warn-note">⚠️ Regeneration alone only reaches <strong>${plan.atKickoff}%</strong> by kickoff. Use <strong>${plan.greensNeeded} green pack${plan.greensNeeded === 1 ? '' : 's'}</strong> right before the match to hit ${target}%${Number.isFinite(plan.minutesToTarget) ? ` — or it reaches ${target}% naturally in ~${(plan.minutesToTarget / 60).toFixed(1)} h if the match can wait` : ''}.</div>`;
+  }
+  for (const el of [condIn, hoursIn, targetIn]) el.addEventListener('input', drawCondition);
+  drawCondition();
 }

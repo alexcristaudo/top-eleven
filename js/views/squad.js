@@ -2,6 +2,7 @@
 import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
+import { fastTrainerRating } from '../logic/analysis.js';
 import { esc, posBadge } from './ui.js';
 
 export function renderSquad(view) {
@@ -16,6 +17,7 @@ export function renderSquad(view) {
       <input type="file" id="import-file" accept="application/json,.json" class="sr-only">
     </div>
     <div id="editor"></div>
+    <div id="compare-card"></div>
   `;
 
   const listEl = view.querySelector('#squad-list');
@@ -25,6 +27,7 @@ export function renderSquad(view) {
     const players = getPlayers();
     if (!players.length) {
       listEl.innerHTML = `<div class="empty">No players yet. Add your squad to unlock personalised training plans and tactics.</div>`;
+      drawCompare();
       return;
     }
     listEl.innerHTML = `<div class="card">` + players
@@ -42,6 +45,7 @@ export function renderSquad(view) {
     for (const row of listEl.querySelectorAll('.player-row')) {
       row.addEventListener('click', () => { location.hash = `#/player/${row.dataset.id}`; });
     }
+    drawCompare();
   }
 
   function drawEditor(player) {
@@ -119,6 +123,52 @@ export function renderSquad(view) {
 
   const fileInput = view.querySelector('#import-file');
   view.querySelector('#import').addEventListener('click', () => fileInput.click());
+  const compareEl = view.querySelector('#compare-card');
+  function drawCompare() {
+    const players = getPlayers();
+    if (players.length < 2) { compareEl.innerHTML = ''; return; }
+    const opts = (sel) => players.map((p, i) =>
+      `<option value="${esc(p.id)}" ${i === sel ? 'selected' : ''}>${esc(p.name)} (${esc(p.position)})</option>`).join('');
+    compareEl.innerHTML = `
+      <div class="card">
+        <h3>Compare players</h3>
+        <p class="hint">Side-by-side check — handy when judging an auction target against a current starter (add the target temporarily, compare, then delete).</p>
+        <div class="field-row">
+          <label class="field"><span>Player A</span><select id="cmp-a">${opts(0)}</select></label>
+          <label class="field"><span>Player B</span><select id="cmp-b">${opts(1)}</select></label>
+        </div>
+        <div id="cmp-out"></div>
+      </div>`;
+    const selA = compareEl.querySelector('#cmp-a');
+    const selB = compareEl.querySelector('#cmp-b');
+    const out = compareEl.querySelector('#cmp-out');
+    function drawTable() {
+      const a = players.find((p) => p.id === selA.value);
+      const b = players.find((p) => p.id === selB.value);
+      if (!a || !b) return;
+      const row = (label, va, vb, fmt = (x) => x) => {
+        const aWin = Number.isFinite(va) && Number.isFinite(vb) && va > vb;
+        const bWin = Number.isFinite(va) && Number.isFinite(vb) && vb > va;
+        return `<tr><th>${esc(label)}</th>
+          <td style="${aWin ? 'color:var(--accent);font-weight:700' : ''}">${Number.isFinite(va) ? fmt(va) : '—'}</td>
+          <td style="${bWin ? 'color:var(--accent);font-weight:700' : ''}">${Number.isFinite(vb) ? fmt(vb) : '—'}</td></tr>`;
+      };
+      out.innerHTML = `
+        <div class="table-wrap"><table class="tbl">
+          <tr><th></th><th>${esc(a.name)}</th><th>${esc(b.name)}</th></tr>
+          ${row('Quality %', a.quality, b.quality)}
+          <tr><th>Age / trainer</th>
+            <td>${esc(a.age)} · ${esc(fastTrainerRating(a.age).label)}</td>
+            <td>${esc(b.age)} · ${esc(fastTrainerRating(b.age).label)}</td></tr>
+          ${ATTRIBUTES.map((at) => row(at.label, a.attrs?.[at.key], b.attrs?.[at.key])).join('')}
+        </table></div>
+        <p class="hint">Green = higher value. Missing attributes show as —.</p>`;
+    }
+    selA.addEventListener('change', drawTable);
+    selB.addEventListener('change', drawTable);
+    drawTable();
+  }
+
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;

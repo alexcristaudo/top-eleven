@@ -1,5 +1,5 @@
 // TE Manager service worker — cache-first with versioned precache.
-const VERSION = 'te-manager-v1';
+const VERSION = 'te-manager-v2';
 const ASSETS = [
   './',
   './index.html',
