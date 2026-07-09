@@ -3,6 +3,7 @@ import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
 import { fastTrainerRating } from '../logic/analysis.js';
+import { recognizeScreenshot } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
 
 export function renderSquad(view) {
@@ -12,10 +13,13 @@ export function renderSquad(view) {
     <div id="squad-list"></div>
     <div class="btn-row">
       <button class="btn" id="add-player">＋ Add player</button>
+      <button class="btn secondary" id="scan-player">📷 From screenshot</button>
       <button class="btn secondary" id="export">Export JSON</button>
       <button class="btn secondary" id="import">Import JSON</button>
       <input type="file" id="import-file" accept="application/json,.json" class="sr-only">
+      <input type="file" id="scan-file" accept="image/*" class="sr-only">
     </div>
+    <div id="scan-status"></div>
     <div id="editor"></div>
     <div id="compare-card"></div>
   `;
@@ -48,8 +52,11 @@ export function renderSquad(view) {
     drawCompare();
   }
 
-  function drawEditor(player) {
-    const p = player || { id: newId(), name: '', position: 'MC', altPositions: [], age: 18, quality: 20, attrs: {} };
+  function drawEditor(player, draft = null) {
+    const p = player || {
+      id: newId(), name: '', position: 'MC', altPositions: [], age: 18, quality: 20, attrs: {},
+      ...(draft || {}),
+    };
     const isNew = !player;
     editorEl.innerHTML = `
       <div class="card" id="edit-card">
@@ -111,6 +118,36 @@ export function renderSquad(view) {
   }
 
   view.querySelector('#add-player').addEventListener('click', () => drawEditor(null));
+
+  // ---------- Screenshot import (local OCR) ----------
+  const scanFile = view.querySelector('#scan-file');
+  const scanStatus = view.querySelector('#scan-status');
+  view.querySelector('#scan-player').addEventListener('click', () => scanFile.click());
+  scanFile.addEventListener('change', async () => {
+    const file = scanFile.files[0];
+    scanFile.value = '';
+    if (!file) return;
+    scanStatus.innerHTML = `<div class="note">📷 Preparing… <span class="hint">(first use downloads the ~15 MB OCR engine, then it works offline)</span></div>`;
+    try {
+      const result = await recognizeScreenshot(file, (msg, progress) => {
+        scanStatus.innerHTML = `<div class="note">📷 ${esc(msg)}${progress != null ? ` ${Math.round(progress * 100)}%` : ''} — everything runs on this device.</div>`;
+      });
+      if (result.found === 0 && result.age === null && result.quality === null) {
+        scanStatus.innerHTML = `<div class="warn-note">Couldn't read any player data from that image. Use a screenshot of the player-profile screen (the one showing all 15 skills), as sharp and uncropped as possible.</div>`;
+        return;
+      }
+      const missing = 15 - result.found;
+      scanStatus.innerHTML = `<div class="note">✅ Recognised ${result.found}/15 attributes${result.age ? ', age' : ''}${result.quality ? ', quality' : ''}${result.name ? ', name' : ''}.
+        ${missing > 0 || !result.age || !result.name ? ' Review the form below and fill any gaps before saving.' : ' Review and save.'}</div>`;
+      const draft = { attrs: result.attrs };
+      if (result.name) draft.name = result.name;
+      if (result.age) draft.age = result.age;
+      if (result.quality) draft.quality = result.quality;
+      drawEditor(null, draft);
+    } catch (e) {
+      scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
+    }
+  });
 
   view.querySelector('#export').addEventListener('click', () => {
     const blob = new Blob([exportSquad()], { type: 'application/json' });
