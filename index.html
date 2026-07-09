@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>TE Manager — Top Eleven Strategy Assistant</title>
+  <meta name="description" content="Strategic companion for Top Eleven: training plans, player development, counter-formations, and strategy guides.">
+  <meta name="theme-color" content="#0b1220">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TE Manager">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="34" height="34">
+        <div>
+          <h1>TE Manager</h1>
+          <p>Top Eleven strategy assistant</p>
+        </div>
+      </div>
+      <nav id="side-nav" class="side-nav" aria-label="Primary"></nav>
+      <footer class="sidebar-foot">
+        <p>Unofficial fan tool. Not affiliated with Nordeus.</p>
+      </footer>
+    </aside>
+    <main id="view" tabindex="-1"></main>
+    <nav id="tabbar" class="tabbar" aria-label="Primary"></nav>
+  </div>
+  <script type="module" src="js/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+    }
+  </script>
+</body>
+</html>
