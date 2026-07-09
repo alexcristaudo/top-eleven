@@ -7,6 +7,7 @@ An unofficial, extensive strategic companion for [Top Eleven](https://www.topele
 ## Features
 
 - **Squad tracker** — save your players (position, age, quality, all 15 attributes). Everything below personalizes around them. Data stays on your device; JSON export/import moves it between phone and computer.
+- **Screenshot import** — snap the in-game player-profile screen and the app reads name, age, quality and all 15 attributes with on-device OCR (bundled Tesseract, ~15 MB lazy-loaded on first use, works offline after; nothing is uploaded). Recognised values prefill the add-player form for review.
 - **Player development** — fast-trainer rating, development verdict (crown jewel / project / peak performer / sell now), per-player training plan with intensity and green-pack advice.
 - **Areas of improvement** — role-weighted analysis ranks each player's weakest skills for their position and names the exact drills that fix them.
 - **Training centre** — 26-drill catalogue with condition costs, a session builder that packs the best drills into any condition budget, and an intensity guide.
