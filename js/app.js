@@ -5,12 +5,14 @@ import { renderPlayer } from './views/player.js';
 import { renderTraining } from './views/training.js';
 import { renderTactics } from './views/tactics.js';
 import { renderGuides } from './views/guides.js';
+import { renderSeason } from './views/season.js';
 
 const NAV = [
   { path: '/', label: 'Home', icon: '🏠' },
   { path: '/squad', label: 'Squad', icon: '👥' },
   { path: '/training', label: 'Training', icon: '🏋️' },
   { path: '/tactics', label: 'Tactics', icon: '📋' },
+  { path: '/season', label: 'Season', icon: '📅' },
   { path: '/guides', label: 'Guides', icon: '📖' },
 ];
 
@@ -20,6 +22,7 @@ const ROUTES = [
   { pattern: /^\/player\/([\w-]+)$/, render: renderPlayer, nav: '/squad' },
   { pattern: /^\/training$/, render: renderTraining, nav: '/training' },
   { pattern: /^\/tactics$/, render: renderTactics, nav: '/tactics' },
+  { pattern: /^\/season$/, render: renderSeason, nav: '/season' },
   { pattern: /^\/guides$/, render: renderGuides, nav: '/guides' },
 ];
 

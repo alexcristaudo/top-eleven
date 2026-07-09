@@ -1,7 +1,7 @@
 // Tactics centre: counter-formation tool, formation encyclopedia, settings reference.
 import { FORMATIONS, ORIENTATION_REFERENCE } from '../data/formations.js';
 import { counterOptions, squadFitForFormation, bestXI } from '../logic/analysis.js';
-import { getPlayers } from '../store.js';
+import { getPlayers, getData, setData, newId } from '../store.js';
 import { esc, pitchHtml, settingsTable, posBadge, shortName } from './ui.js';
 
 export function renderTactics(view) {
@@ -28,6 +28,29 @@ export function renderTactics(view) {
         </select>
       </label>
       <div id="counter-out"></div>
+    </div>
+
+    <div class="card">
+      <h3>Scouting log</h3>
+      <p class="hint">Record what formation each rival used. Next time you face them, their history and the recommended counter are one tap away.</p>
+      <div class="field-row">
+        <label class="field"><span>Opponent (manager or club)</span><input type="text" id="scout-name" placeholder="e.g. FC Rival"></label>
+        <label class="field"><span>Formation they used</span>
+          <select id="scout-formation">
+            ${FORMATIONS.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label class="field"><span>Result</span>
+          <select id="scout-result">
+            <option value="">—</option><option value="W">Won</option><option value="D">Drew</option><option value="L">Lost</option>
+          </select>
+        </label>
+        <label class="field"><span>Notes (optional)</span><input type="text" id="scout-notes" placeholder="e.g. fast AML, weak left back"></label>
+      </div>
+      <div class="btn-row"><button class="btn" id="scout-add">Log opponent</button></div>
+      <div id="scout-list"></div>
     </div>
 
     <div class="card">
@@ -132,6 +155,83 @@ export function renderTactics(view) {
       `).join('')}
     `;
   });
+
+  // ---------- Scouting log ----------
+  const scoutList = view.querySelector('#scout-list');
+  const RESULT_CHIP = { W: 'green', D: 'yellow', L: 'red' };
+
+  function drawScout() {
+    const entries = getData('scout', []);
+    if (!entries.length) {
+      scoutList.innerHTML = '<p class="hint">No opponents logged yet.</p>';
+      return;
+    }
+    // Group by opponent (case-insensitive), newest first inside each group.
+    const groups = new Map();
+    for (const e of entries) {
+      const key = e.opponent.toLowerCase();
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(e);
+    }
+    scoutList.innerHTML = [...groups.values()]
+      .sort((a, b) => Math.max(...b.map((e) => e.date)) - Math.max(...a.map((e) => e.date)))
+      .map((group) => {
+        const sorted = group.slice().sort((a, b) => b.date - a.date);
+        const latest = sorted[0];
+        const counter = counterOptions(latest.formationId);
+        const latestFormation = FORMATIONS.find((f) => f.id === latest.formationId);
+        return `
+          <div class="divider"></div>
+          <h4>${esc(latest.opponent)}</h4>
+          <p>Last seen: <strong>${esc(latestFormation ? latestFormation.name : latest.formationId)}</strong>
+            ${counter && counter.counters.length ? `→ counter with <strong>${esc(counter.counters[0].formation.name)}</strong>
+              <button class="btn secondary small" data-counter="${esc(latest.formationId)}">Open in counter tool</button>` : ''}
+          </p>
+          ${sorted.slice(0, 5).map((e) => {
+            const f = FORMATIONS.find((x) => x.id === e.formationId);
+            return `<p class="hint">${esc(new Date(e.date).toLocaleDateString())} · ${esc(f ? f.name : e.formationId)}
+              ${e.result ? `<span class="chip ${RESULT_CHIP[e.result] || ''}">${esc(e.result)}</span>` : ''}
+              ${e.notes ? ' — ' + esc(e.notes) : ''}
+              <button class="btn danger small" data-scout-del="${esc(e.id)}">✕</button></p>`;
+          }).join('')}
+        `;
+      }).join('');
+
+    for (const btn of scoutList.querySelectorAll('[data-scout-del]')) {
+      btn.addEventListener('click', () => {
+        setData('scout', getData('scout', []).filter((e) => e.id !== btn.dataset.scoutDel));
+        drawScout();
+      });
+    }
+    for (const btn of scoutList.querySelectorAll('[data-counter]')) {
+      btn.addEventListener('click', () => {
+        oppSel.value = btn.dataset.counter;
+        oppSel.dispatchEvent(new Event('change'));
+        oppSel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }
+
+  view.querySelector('#scout-add').addEventListener('click', () => {
+    const nameEl = view.querySelector('#scout-name');
+    const opponent = nameEl.value.trim();
+    if (!opponent) { nameEl.focus(); return; }
+    const entries = getData('scout', []);
+    entries.push({
+      id: newId(),
+      opponent,
+      formationId: view.querySelector('#scout-formation').value,
+      result: view.querySelector('#scout-result').value,
+      notes: view.querySelector('#scout-notes').value.trim(),
+      date: Date.now(),
+    });
+    setData('scout', entries);
+    nameEl.value = '';
+    view.querySelector('#scout-notes').value = '';
+    view.querySelector('#scout-result').value = '';
+    drawScout();
+  });
+  drawScout();
 
   const encySel = view.querySelector('#ency');
   const encyOut = view.querySelector('#ency-out');

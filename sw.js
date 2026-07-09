@@ -1,5 +1,5 @@
 // TE Manager service worker — cache-first with versioned precache.
-const VERSION = 'te-manager-v2';
+const VERSION = 'te-manager-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
   './js/data/drills.js',
   './js/data/formations.js',
   './js/data/guides.js',
+  './js/data/checklist.js',
   './js/views/ui.js',
   './js/views/dashboard.js',
   './js/views/squad.js',
@@ -20,6 +21,7 @@ const ASSETS = [
   './js/views/training.js',
   './js/views/tactics.js',
   './js/views/guides.js',
+  './js/views/season.js',
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
