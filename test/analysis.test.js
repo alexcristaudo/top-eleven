@@ -6,6 +6,7 @@ import {
   fastTrainerRating, trainerVerdict, weaknessReport, roleFit,
   recommendDrills, needsFromWeaknesses, needsForPosition,
   developmentPlan, counterOptions, squadFitForFormation,
+  bestXI, conditionPlan,
 } from '../js/logic/analysis.js';
 import { getFormation } from '../js/data/formations.js';
 
@@ -95,6 +96,61 @@ test('counterOptions: resolves opponent and counters with settings', () => {
     assert.ok(c.why.length > 20);
   }
   assert.equal(counterOptions('nope'), null);
+});
+
+test('bestXI: fills slots by quality, uses alt positions, reports gaps and bench', () => {
+  const squad = [
+    { id: 'gk', name: 'Keeper', position: 'GK', quality: 70 },
+    { id: 'st1', name: 'Star ST', position: 'ST', quality: 95 },
+    { id: 'st2', name: 'Backup ST', position: 'ST', quality: 60 },
+    { id: 'st3', name: 'Third ST', position: 'ST', quality: 50 },
+    { id: 'mc1', name: 'Mid One', position: 'MC', quality: 88 },
+    { id: 'mc2', name: 'Mid Two', position: 'MC', quality: 80 },
+    { id: 'util', name: 'Utility', position: 'DMC', altPositions: ['ML'], quality: 75 },
+    { id: 'dc1', name: 'CB One', position: 'DC', quality: 85 },
+    { id: 'dc2', name: 'CB Two', position: 'DC', quality: 82 },
+    { id: 'dl', name: 'Left Back', position: 'DL', quality: 78 },
+    { id: 'dr', name: 'Right Back', position: 'DR', quality: 77 },
+    { id: 'mr', name: 'Right Mid', position: 'MR', quality: 72 },
+  ];
+  const xi = bestXI(getFormation('4-4-2'), squad);
+  const byPos = (pos) => xi.slots.filter((s) => s.pos === pos).map((s) => s.player && s.player.id);
+  // Both ST slots go to the two best strikers; the third rides the bench.
+  assert.deepEqual(byPos('ST').sort(), ['st1', 'st2']);
+  assert.ok(xi.bench.some((p) => p.id === 'st3'));
+  // ML slot has no natural ML — filled by the utility DMC via alt position.
+  assert.deepEqual(byPos('ML'), ['util']);
+  // Every slot covered by this squad.
+  assert.deepEqual(xi.missing, []);
+  assert.ok(xi.avgQuality > 70);
+  // No player assigned twice.
+  const ids = xi.slots.filter((s) => s.player).map((s) => s.player.id);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('bestXI: reports missing positions when squad lacks cover', () => {
+  const xi = bestXI(getFormation('4-4-2'), [
+    { id: 'a', name: 'A', position: 'ST', quality: 90 },
+  ]);
+  assert.ok(xi.missing.includes('GK'));
+  assert.ok(xi.missing.length === 10);
+});
+
+test('conditionPlan: regen math, green packs, readiness', () => {
+  // 65% + 12 ticks (3h) * 5% = 100 (capped) → ready, no greens.
+  const ready = conditionPlan({ current: 65, minutesUntilMatch: 180, target: 90 });
+  assert.equal(ready.atKickoff, 100);
+  assert.ok(ready.ready);
+  assert.equal(ready.greensNeeded, 0);
+  // 40% + 2 ticks * 5% = 50; needs 40 more → 3 greens (15% each).
+  const short = conditionPlan({ current: 40, minutesUntilMatch: 30, target: 90 });
+  assert.equal(short.atKickoff, 50);
+  assert.ok(!short.ready);
+  assert.equal(short.greensNeeded, 3);
+  // Time to reach target naturally: (90-40)/5 = 10 ticks = 150 min.
+  assert.equal(short.minutesToTarget, 150);
+  // Already at target.
+  assert.equal(conditionPlan({ current: 95, minutesUntilMatch: 0, target: 90 }).minutesToTarget, 0);
 });
 
 test('squadFitForFormation: matches exact and alt positions, sorted by quality', () => {

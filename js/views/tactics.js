@@ -1,13 +1,23 @@
 // Tactics centre: counter-formation tool, formation encyclopedia, settings reference.
 import { FORMATIONS, ORIENTATION_REFERENCE } from '../data/formations.js';
-import { counterOptions, squadFitForFormation } from '../logic/analysis.js';
+import { counterOptions, squadFitForFormation, bestXI } from '../logic/analysis.js';
 import { getPlayers } from '../store.js';
-import { esc, pitchHtml, settingsTable, posBadge } from './ui.js';
+import { esc, pitchHtml, settingsTable, posBadge, shortName } from './ui.js';
 
 export function renderTactics(view) {
   view.innerHTML = `
     <h2 class="page-title">Tactics centre</h2>
     <p class="page-sub">Pick the formation your opponent is using and get the counter — shape, orientation settings and which of your players fit it.</p>
+
+    <div class="card">
+      <h3>Best XI builder</h3>
+      <label class="field"><span>Your formation</span>
+        <select id="xi-formation">
+          ${FORMATIONS.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}
+        </select>
+      </label>
+      <div id="xi-out"></div>
+    </div>
 
     <div class="card">
       <h3>Counter-formation tool</h3>
@@ -41,6 +51,31 @@ export function renderTactics(view) {
   `;
 
   const players = getPlayers();
+
+  const xiSel = view.querySelector('#xi-formation');
+  const xiOut = view.querySelector('#xi-out');
+  function drawXI() {
+    if (!players.length) {
+      xiOut.innerHTML = `<p class="hint">Add your squad on the Squad page and this tool will pick your strongest lineup for any formation.</p>`;
+      return;
+    }
+    const f = FORMATIONS.find((x) => x.id === xiSel.value);
+    if (!f) return;
+    const xi = bestXI(f, players);
+    const labels = xi.slots.map((s) => s.player ? shortName(s.player.name) : '—');
+    xiOut.innerHTML = `
+      ${pitchHtml(f, labels)}
+      <p><span class="chip green">XI avg quality: ${Math.round(xi.avgQuality)}%</span>
+         ${xi.missing.length ? xi.missing.map((pos) => `<span class="chip red">no ${esc(pos)}</span>`).join('') : '<span class="chip blue">all positions covered</span>'}</p>
+      ${xi.missing.length ? `<p class="hint">Uncovered slots mean out-of-position players in-game (heavy rating penalty). Train a second position or buy cover — or pick a shape that fits your squad.</p>` : ''}
+      ${xi.bench.length ? `
+        <h4>Bench (by quality)</h4>
+        <p>${xi.bench.slice(0, 8).map((p) => `<span class="chip">${esc(p.name)} · ${esc(p.position)} · ${esc(p.quality)}%</span>`).join('')}</p>
+      ` : ''}
+    `;
+  }
+  xiSel.addEventListener('change', drawXI);
+  drawXI();
 
   function formationDetail(f, { withCounters = true } = {}) {
     return `

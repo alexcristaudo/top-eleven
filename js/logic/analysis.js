@@ -178,4 +178,48 @@ export function squadFitForFormation(formation, players) {
   });
 }
 
+// Pick the strongest XI for a formation from saved players.
+// Players are taken in quality order and placed into the first open slot that
+// matches their main position, then a second pass fills remaining slots via
+// alt positions. Returns slot assignments (in formation.shape order), the
+// bench, average XI quality and any unfilled positions.
+export function bestXI(formation, players) {
+  const slots = formation.shape.map((s) => ({ pos: s.pos, player: null }));
+  const pool = players.slice().sort((a, b) => (b.quality || 0) - (a.quality || 0));
+  const used = new Set();
+
+  for (const matcher of [
+    (p, pos) => p.position === pos,
+    (p, pos) => (p.altPositions || []).includes(pos),
+  ]) {
+    for (const p of pool) {
+      if (used.has(p.id)) continue;
+      const slot = slots.find((s) => !s.player && matcher(p, s.pos));
+      if (slot) { slot.player = p; used.add(p.id); }
+    }
+  }
+
+  const bench = pool.filter((p) => !used.has(p.id));
+  const filled = slots.filter((s) => s.player);
+  const avgQuality = filled.length
+    ? filled.reduce((sum, s) => sum + (s.player.quality || 0), 0) / filled.length
+    : 0;
+  const missing = slots.filter((s) => !s.player).map((s) => s.pos);
+  return { slots, bench, avgQuality, missing };
+}
+
+// Condition planning: Top Eleven regenerates condition on a 15-minute tick
+// (~5% per tick by default) and a green (rest) pack restores ~15%.
+export function conditionPlan({ current, minutesUntilMatch, target = 90, regenPer15 = 5, greenValue = 15 }) {
+  const cur = Math.max(0, Math.min(100, current));
+  const ticks = Math.max(0, Math.floor(minutesUntilMatch / 15));
+  const atKickoff = Math.min(100, cur + ticks * regenPer15);
+  const shortfall = Math.max(0, target - atKickoff);
+  const greensNeeded = Math.ceil(shortfall / greenValue);
+  // Minutes of natural regen needed to reach target with no packs (Infinity if unreachable).
+  const ticksToTarget = Math.ceil(Math.max(0, target - cur) / regenPer15);
+  const minutesToTarget = cur >= target ? 0 : ticksToTarget * 15;
+  return { atKickoff, greensNeeded, minutesToTarget, ready: atKickoff >= target };
+}
+
 export { attrLabel };

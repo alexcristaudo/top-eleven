@@ -12,13 +12,21 @@ export function posBadge(pos) {
   return `<span class="badge-pos ${zone}">${esc(pos)}</span>`;
 }
 
-// Render a formation as dots on a pitch.
-export function pitchHtml(formation) {
-  const dots = formation.shape.map((s) => {
+// Render a formation as dots on a pitch. Optional `labels` (matching
+// formation.shape order) adds a short name under each dot.
+export function pitchHtml(formation, labels = null) {
+  const dots = formation.shape.map((s, i) => {
     const zone = POSITION_ZONE[s.pos] || 'mid';
-    return `<span class="dot ${zone}" style="left:${s.x}%;top:${s.y}%"><i>${esc(s.pos)}</i></span>`;
+    const label = labels && labels[i] ? `<b>${esc(labels[i])}</b>` : '';
+    return `<span class="dot ${zone}" style="left:${s.x}%;top:${s.y}%"><i>${esc(s.pos)}</i>${label}</span>`;
   }).join('');
   return `<div class="pitch" role="img" aria-label="${esc(formation.name)} formation">${dots}</div>`;
+}
+
+// First name truncated for pitch labels.
+export function shortName(name, max = 9) {
+  const last = String(name || '').trim().split(/\s+/).pop();
+  return last.length > max ? last.slice(0, max - 1) + '…' : last;
 }
 
 export function meterRow(label, value, max = 100) {
