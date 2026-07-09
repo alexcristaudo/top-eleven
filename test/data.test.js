@@ -7,6 +7,7 @@ import { ROLES, POSITIONS, POSITION_ZONE } from '../js/data/roles.js';
 import { DRILLS, DRILL_CATEGORIES, INTENSITY } from '../js/data/drills.js';
 import { FORMATIONS, getFormation, ORIENTATION_REFERENCE } from '../js/data/formations.js';
 import { GUIDES } from '../js/data/guides.js';
+import { SEASON_CHECKLIST, ALL_TASK_IDS, TOKEN_CATEGORIES } from '../js/data/checklist.js';
 
 test('attributes: 15 skills across 3 groups, unique keys', () => {
   assert.equal(ATTRIBUTES.length, 15);
@@ -80,6 +81,20 @@ test('formations: 11 players, valid positions, resolvable counters', () => {
     }
   }
   assert.ok(ORIENTATION_REFERENCE.length >= 8);
+});
+
+test('checklist: unique task ids across phases; token categories valid', () => {
+  assert.equal(SEASON_CHECKLIST.length, 3);
+  assert.equal(new Set(ALL_TASK_IDS).size, ALL_TASK_IDS.length);
+  assert.equal(ALL_TASK_IDS.length, SEASON_CHECKLIST.reduce((s, p) => s + p.tasks.length, 0));
+  for (const phase of SEASON_CHECKLIST) {
+    assert.ok(phase.id && phase.label);
+    for (const t of phase.tasks) assert.ok(t.id && t.text.length > 10);
+  }
+  const catIds = TOKEN_CATEGORIES.map((c) => c.id);
+  assert.equal(new Set(catIds).size, catIds.length);
+  for (const c of TOKEN_CATEGORIES) assert.ok(['spend', 'earn'].includes(c.kind));
+  assert.ok(TOKEN_CATEGORIES.some((c) => c.kind === 'spend') && TOKEN_CATEGORIES.some((c) => c.kind === 'earn'));
 });
 
 test('guides: unique ids and substantial content', () => {

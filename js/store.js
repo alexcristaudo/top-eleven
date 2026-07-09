@@ -40,8 +40,38 @@ export function newId() {
   return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// ---------- Generic keyed storage (scout log, checklist, tokens) ----------
+
+const DATA_KEYS = {
+  scout: 'te-manager.scout.v1',
+  checklist: 'te-manager.checklist.v1',
+  tokens: 'te-manager.tokens.v1',
+};
+
+export function getData(name, fallback) {
+  try {
+    const raw = localStorage.getItem(DATA_KEYS[name]);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function setData(name, value) {
+  localStorage.setItem(DATA_KEYS[name], JSON.stringify(value));
+}
+
+// ---------- Export / import (all app data) ----------
+
 export function exportSquad() {
-  return JSON.stringify({ app: 'te-manager', version: 1, players: load() }, null, 2);
+  return JSON.stringify({
+    app: 'te-manager',
+    version: 2,
+    players: load(),
+    scout: getData('scout', []),
+    checklist: getData('checklist', {}),
+    tokens: getData('tokens', []),
+  }, null, 2);
 }
 
 export function importSquad(json) {
@@ -55,5 +85,8 @@ export function importSquad(json) {
     }
   }
   save(players);
+  if (Array.isArray(data.scout)) setData('scout', data.scout);
+  if (data.checklist && typeof data.checklist === 'object') setData('checklist', data.checklist);
+  if (Array.isArray(data.tokens)) setData('tokens', data.tokens);
   return players.length;
 }
