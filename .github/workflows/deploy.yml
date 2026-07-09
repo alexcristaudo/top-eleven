@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -7,9 +7,11 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
-  group: deploy
+  group: pages
   cancel-in-progress: true
 
 jobs:
@@ -25,21 +27,16 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/configure-pages@v5
         with:
-          node-version: 22
-      - name: Stage site files
-        run: |
-          mkdir dist
-          rsync -a --exclude '.git*' --exclude '.github' --exclude 'test' \
-            --exclude 'package.json' --exclude 'README.md' --exclude 'dist' \
-            ./ dist/
-      - name: Ensure Pages project exists
-        run: npx wrangler@3 pages project create top-eleven-manager --production-branch=main 2>/dev/null || true
-      - name: Deploy
-        run: npx wrangler@3 pages deploy dist --project-name=top-eleven-manager --branch=main
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
