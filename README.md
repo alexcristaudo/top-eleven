@@ -2,7 +2,7 @@
 
 An unofficial, extensive strategic companion for [Top Eleven](https://www.topeleven.com/): training-drill planning, player development, weakness analysis, counter-formations with full orientation settings, and long-game strategy guides — all in a fast, offline-capable web app that installs on your iPhone.
 
-**Live app:** https://top-eleven-manager.pages.dev
+**Live app:** https://alexcristaudo.github.io/top-eleven/
 
 ## Features
 
@@ -28,7 +28,7 @@ python3 -m http.server 8000   # serve locally
 npm test                      # data-integrity + logic tests (node --test)
 ```
 
-Deploys automatically to Cloudflare Pages on every push to `main` (`.github/workflows/deploy.yml`), so the repository can stay private. One-time setup: add two repository secrets under **Settings → Secrets and variables → Actions** — `CLOUDFLARE_API_TOKEN` (token with *Cloudflare Pages: Edit* permission) and `CLOUDFLARE_ACCOUNT_ID`.
+Deploys automatically to GitHub Pages on every push to `main` (`.github/workflows/deploy.yml`); requires the repository to be public (or GitHub Pro). Pages is enabled automatically on the first deploy — if that step ever fails, flip **Settings → Pages → Source: GitHub Actions** manually and re-run the workflow.
 
 ## Disclaimer
 
