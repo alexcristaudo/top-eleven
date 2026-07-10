@@ -6,7 +6,7 @@ import {
   fastTrainerRating, trainerVerdict, weaknessReport, roleFit,
   recommendDrills, needsFromWeaknesses, needsForPosition,
   developmentPlan, counterOptions, squadFitForFormation,
-  bestXI, conditionPlan,
+  bestXI, conditionPlan, rankFormations,
 } from '../js/logic/analysis.js';
 import { getFormation } from '../js/data/formations.js';
 
@@ -134,6 +134,34 @@ test('bestXI: reports missing positions when squad lacks cover', () => {
   ]);
   assert.ok(xi.missing.includes('GK'));
   assert.ok(xi.missing.length === 10);
+});
+
+test('rankFormations: full coverage beats higher quality with gaps', () => {
+  // Squad tailor-made for 4-4-2: exactly its 11 positions, nothing exotic.
+  const squad = [
+    { id: 'gk', name: 'GK', position: 'GK', quality: 80 },
+    { id: 'dl', name: 'DL', position: 'DL', quality: 80 },
+    { id: 'dc1', name: 'D1', position: 'DC', quality: 80 },
+    { id: 'dc2', name: 'D2', position: 'DC', quality: 80 },
+    { id: 'dr', name: 'DR', position: 'DR', quality: 80 },
+    { id: 'ml', name: 'ML', position: 'ML', quality: 80 },
+    { id: 'mc1', name: 'M1', position: 'MC', quality: 80 },
+    { id: 'mc2', name: 'M2', position: 'MC', quality: 80 },
+    { id: 'mr', name: 'MR', position: 'MR', quality: 80 },
+    { id: 's1', name: 'S1', position: 'ST', quality: 80 },
+    { id: 's2', name: 'S2', position: 'ST', quality: 80 },
+  ];
+  const ranked = rankFormations(squad);
+  assert.equal(ranked[0].formation.id, '4-4-2');
+  assert.equal(ranked[0].missing, 0);
+  assert.ok(Math.abs(ranked[0].score - 80) < 0.01);
+  // The butterfly needs DMC/AMC this squad lacks — must rank below despite
+  // sharing the same player pool.
+  const butterfly = ranked.find((r) => r.formation.id === 'butterfly');
+  assert.ok(butterfly.missing > 0);
+  assert.ok(ranked.indexOf(butterfly) > 0);
+  // Every formation is present exactly once.
+  assert.equal(ranked.length, new Set(ranked.map((r) => r.formation.id)).size);
 });
 
 test('conditionPlan: regen math, green packs, readiness', () => {

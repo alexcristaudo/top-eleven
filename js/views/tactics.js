@@ -1,6 +1,6 @@
 // Tactics centre: counter-formation tool, formation encyclopedia, settings reference.
 import { FORMATIONS, ORIENTATION_REFERENCE } from '../data/formations.js';
-import { counterOptions, squadFitForFormation, bestXI } from '../logic/analysis.js';
+import { counterOptions, squadFitForFormation, bestXI, rankFormations } from '../logic/analysis.js';
 import { getPlayers, getData, setData, newId } from '../store.js';
 import { esc, pitchHtml, settingsTable, posBadge, shortName } from './ui.js';
 
@@ -11,6 +11,7 @@ export function renderTactics(view) {
 
     <div class="card">
       <h3>Best XI builder</h3>
+      <div id="xi-recommend"></div>
       <label class="field"><span>Your formation</span>
         <select id="xi-formation">
           ${FORMATIONS.map((f) => `<option value="${f.id}">${esc(f.name)}</option>`).join('')}
@@ -77,6 +78,25 @@ export function renderTactics(view) {
 
   const xiSel = view.querySelector('#xi-formation');
   const xiOut = view.querySelector('#xi-out');
+  const xiRecommend = view.querySelector('#xi-recommend');
+
+  function drawRecommendations() {
+    if (!players.length) { xiRecommend.innerHTML = ''; return; }
+    const ranked = rankFormations(players);
+    const top = ranked.slice(0, 3);
+    xiRecommend.innerHTML = `
+      <p class="hint">⭐ Best formations for <strong>your</strong> squad — full position coverage first (out-of-position players take a heavy in-game penalty), then strongest XI:</p>
+      <p>${top.map((r, i) => `
+        <button class="btn ${i === 0 ? '' : 'secondary'} small" data-pick="${r.formation.id}">
+          ${i === 0 ? '⭐ ' : ''}${esc(r.formation.name)} · ${Math.round(r.score)}%${r.missing ? ` · ${r.missing} gap${r.missing === 1 ? '' : 's'}` : ''}
+        </button>`).join(' ')}</p>`;
+    for (const btn of xiRecommend.querySelectorAll('[data-pick]')) {
+      btn.addEventListener('click', () => { xiSel.value = btn.dataset.pick; drawXI(); });
+    }
+    // Default the builder to the recommended shape.
+    xiSel.value = top[0].formation.id;
+  }
+
   function drawXI() {
     if (!players.length) {
       xiOut.innerHTML = `<p class="hint">Add your squad on the Squad page and this tool will pick your strongest lineup for any formation.</p>`;
@@ -98,6 +118,7 @@ export function renderTactics(view) {
     `;
   }
   xiSel.addEventListener('change', drawXI);
+  drawRecommendations();
   drawXI();
 
   function formationDetail(f, { withCounters = true } = {}) {
