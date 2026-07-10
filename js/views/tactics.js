@@ -85,10 +85,10 @@ export function renderTactics(view) {
     const ranked = rankFormations(players);
     const top = ranked.slice(0, 3);
     xiRecommend.innerHTML = `
-      <p class="hint">⭐ Best formations for <strong>your</strong> squad — full position coverage first (out-of-position players take a heavy in-game penalty), then strongest XI:</p>
+      <p class="hint">⭐ Best formations for <strong>your</strong> squad — full position coverage first (out-of-position players take a heavy in-game penalty), then a blend of your XI's quality and the shape's overall strength:</p>
       <p>${top.map((r, i) => `
         <button class="btn ${i === 0 ? '' : 'secondary'} small" data-pick="${r.formation.id}">
-          ${i === 0 ? '⭐ ' : ''}${esc(r.formation.name)} · ${Math.round(r.score)}%${r.missing ? ` · ${r.missing} gap${r.missing === 1 ? '' : 's'}` : ''}
+          ${i === 0 ? '⭐ ' : ''}${esc(r.formation.name)} · fit ${Math.round(r.fit)}% · shape ${r.meta}/10${r.missing ? ` · ${r.missing} gap${r.missing === 1 ? '' : 's'}` : ''}
         </button>`).join(' ')}</p>`;
     for (const btn of xiRecommend.querySelectorAll('[data-pick]')) {
       btn.addEventListener('click', () => { xiSel.value = btn.dataset.pick; drawXI(); });

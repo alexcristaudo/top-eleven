@@ -249,11 +249,14 @@ export function bestXI(formation, players) {
   return { slots, bench, avgQuality, missing };
 }
 
-// Rank every formation by how well THIS squad fills it. Coverage dominates:
-// the in-game out-of-position penalty is brutal, so a shape you can fully
-// staff beats a "stronger" shape with holes. Within equal coverage, the
-// average quality of the best XI decides (alt-position slots at a small
-// discount, since players perform slightly worse there).
+// Rank every formation by how well THIS squad fills it, balanced against the
+// shape's inherent (meta) strength. Coverage dominates: the in-game
+// out-of-position penalty is brutal, so a shape you can fully staff beats a
+// "stronger" shape with holes. Within equal coverage the score blends the
+// best XI's average quality (alt-position slots at a small discount) with the
+// formation's metaRating — a shape rated 9/10 gets ~12% over one rated 5/10,
+// comparable to a real quality edge but not enough to override a clearly
+// better-fitting squad.
 export function rankFormations(players) {
   return FORMATIONS
     .map((formation) => {
@@ -264,7 +267,10 @@ export function rankFormations(players) {
         const exact = s.player.position === s.pos;
         total += (s.player.quality || 0) * (exact ? 1 : 0.92);
       }
-      return { formation, xi, score: total / 11, missing: xi.missing.length };
+      const fit = total / 11;
+      const meta = formation.metaRating || 6;
+      const score = fit * (0.85 + meta * 0.03);
+      return { formation, xi, fit, meta, score, missing: xi.missing.length };
     })
     .sort((a, b) => a.missing - b.missing || b.score - a.score);
 }

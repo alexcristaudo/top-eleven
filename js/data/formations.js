@@ -8,6 +8,7 @@ function P(pos, x, y) { return { pos, x, y }; }
 export const FORMATIONS = [
   {
     id: '4-4-2',
+    metaRating: 7,
     name: '4-4-2 Classic',
     shape: [
       P('GK', 50, 93),
@@ -39,6 +40,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-1-2-1-2',
+    metaRating: 9,
     name: '4-1-2-1-2 Narrow Diamond',
     shape: [
       P('GK', 50, 93),
@@ -72,6 +74,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-5-1-v',
+    metaRating: 8.5,
     name: '4-5-1 V-Style',
     shape: [
       P('GK', 50, 93),
@@ -105,6 +108,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-3-2-1',
+    metaRating: 8,
     name: '4-3-2-1 Christmas Tree',
     shape: [
       P('GK', 50, 93),
@@ -137,6 +141,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-2-3-1',
+    metaRating: 9,
     name: '4-2-3-1',
     shape: [
       P('GK', 50, 93),
@@ -169,6 +174,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-4-1-1',
+    metaRating: 6.5,
     name: '4-4-1-1',
     shape: [
       P('GK', 50, 93),
@@ -200,6 +206,7 @@ export const FORMATIONS = [
   },
   {
     id: '3-5-2',
+    metaRating: 7,
     name: '3-5-2 (3-4-1-2)',
     shape: [
       P('GK', 50, 93),
@@ -232,6 +239,7 @@ export const FORMATIONS = [
   },
   {
     id: '3-4-3',
+    metaRating: 6,
     name: '3-4-3',
     shape: [
       P('GK', 50, 93),
@@ -263,6 +271,7 @@ export const FORMATIONS = [
   },
   {
     id: '5-2-2-1',
+    metaRating: 5.5,
     name: '5-2-2-1',
     shape: [
       P('GK', 50, 93),
@@ -294,6 +303,7 @@ export const FORMATIONS = [
   },
   {
     id: '5-3-2',
+    metaRating: 5,
     name: '5-3-2',
     shape: [
       P('GK', 50, 93),
@@ -324,6 +334,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-2-2-2',
+    metaRating: 7.5,
     name: '4-2-2-2 Brazilian Box',
     shape: [
       P('GK', 50, 93),
@@ -355,6 +366,7 @@ export const FORMATIONS = [
   },
   {
     id: '4-1-4-1',
+    metaRating: 6.5,
     name: '4-1-4-1',
     shape: [
       P('GK', 50, 93),
@@ -386,6 +398,7 @@ export const FORMATIONS = [
   },
   {
     id: 'butterfly',
+    metaRating: 7,
     name: '3-2-2-2-1 Butterfly',
     shape: [
       P('GK', 50, 93),
