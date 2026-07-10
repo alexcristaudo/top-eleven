@@ -5,7 +5,7 @@ import { POSITIONS } from '../data/roles.js';
 
 // Fuzzy label stems — OCR often mangles word endings, so match on the start.
 const ATTR_STEMS = {
-  tackling: /tack/i,
+  tackling: /tackl/i, // NOT /tack/: "ATTACK" contains "tack"
   marking: /marki/i,
   positioning: /positio/i,
   heading: /headi/i,
@@ -36,12 +36,15 @@ export function parsePlayerText(text) {
   const attrs = {};
   let age = null;
   let quality = null;
+  let qualityOvr = null;
+  let qualityPct = null;
   let name = null;
   let position = null;
 
   const POS_RE = new RegExp(`(?:^|[^A-Z0-9])(${POSITIONS.join('|')})(?:[^A-Z0-9]|$)`);
 
-  for (const line of lines) {
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
     // Attribute lines: label stem + a plausible number on the same line.
     for (const key of ATTR_KEYS) {
       if (attrs[key] !== undefined) continue;
@@ -68,21 +71,44 @@ export function parsePlayerText(text) {
       if (m) position = m[1];
     }
 
-    // Quality: a percentage that is NOT on an attribute line.
-    if (quality === null && !ATTR_KEYS.some((k) => ATTR_STEMS[k].test(line))) {
+    // Quality: prefer the profile's "OVR 67" (no % in-game); OCR often mangles
+    // the small OVR label ("or", "ove"), so accept variants near the top only.
+    if (qualityOvr === null && li < 8) {
+      const m = line.match(/\b(?:ovr|ove|or)\W{0,3}(\d{1,3})\b/i);
+      if (m) {
+        const v = parseInt(m[1], 10);
+        if (v >= 1 && v <= 250) qualityOvr = v;
+      }
+    }
+    if (qualityPct === null && !/condition/i.test(line) && !ATTR_KEYS.some((k) => ATTR_STEMS[k].test(line))) {
       const m = line.match(/(\d{1,3})\s*%/);
       if (m) {
         const v = parseInt(m[1], 10);
-        if (v >= 1 && v <= 250) quality = v;
+        if (v >= 1 && v <= 250) qualityPct = v;
       }
     }
   }
+  quality = qualityOvr !== null ? qualityOvr : qualityPct;
 
   // Name: a "Firstname Lastname"-shaped line near the top that isn't UI text.
-  const UI_WORDS = /profile|player|skills|attack|defen[cs]e|physical|mental|value|contract|bid|quality|form|age/i;
-  for (const line of lines.slice(0, 8)) {
-    const m = line.match(/^([A-Z][a-zA-Z'’.-]+(?:\s+[A-Z][a-zA-Z'’.-]+){1,2})$/);
-    if (m && !UI_WORDS.test(line)) { name = m[1]; break; }
+  // Unicode-aware (Cuscunà, Müller, …); tolerates a stray shirt number.
+  const UI_WORDS = /profile|player|skills|attack|defen[cs]e|physical|mental|value|contract|bid|quality|form|age|team|roles|overview|playstyle|stats|celebrat|trainer|injur|morale|condition|special|ability|squad|lineup|formation|tactic|tier|very|good|happy|weight|height|foot/i;
+  // Tokenize, drop non-word junk at the edges (badges, the close button "x"),
+  // accept a lowercase first letter (OCR often drops the capital) and
+  // title-case the result.
+  for (const line of lines.slice(0, 10)) {
+    const words = line.split(/\s+/).filter((w) => /^[\p{L}'’.-]{2,}$/u.test(w));
+    const letters = words.join('').length;
+    // Real names are substantial; icon rows OCR into short junk like "MS Cpr".
+    if (words.length >= 2 && words.length <= 4 && letters >= 8
+      && words[0].length >= 3 && words.some((w) => w.length >= 4)) {
+      const candidate = words.slice(0, 3).join(' ');
+      const isSkillRow = ATTR_KEYS.some((k) => ATTR_STEMS[k].test(candidate));
+      if (!UI_WORDS.test(candidate) && !isSkillRow && words.every((w) => /^\p{L}/u.test(w))) {
+        name = candidate.replace(/(^|\s)\p{Ll}/gu, (c) => c.toUpperCase());
+        break;
+      }
+    }
   }
 
   // Fall back: quality ≈ average of attributes when no % was found.
@@ -121,8 +147,16 @@ function mergeInto(target, p) {
 // fill each other's gaps.
 export function mergeSightings(parses, minFound = 6) {
   const merged = [];
+  // Profile "Overview" frames have the header (name/age/OVR) but no skills.
+  // Users flip Overview → Skills per player, so let the most recent header
+  // frame donate its name to a skills frame that couldn't read its own.
+  let lastHeader = null;
   for (const p of parses) {
-    if (!p || p.found < minFound) continue;
+    if (!p) continue;
+    if (p.found < minFound) {
+      if (p.name && (p.quality || p.age)) lastHeader = p;
+      continue;
+    }
     let target = null;
     if (p.name) {
       target = merged.find((m) => m.name && m.name.toLowerCase() === p.name.toLowerCase());
@@ -130,10 +164,17 @@ export function mergeSightings(parses, minFound = 6) {
     if (!target) target = merged.find((m) => sameAttrs(m.attrs, p.attrs));
     if (target) mergeInto(target, p);
     else {
-      merged.push({
+      const entry = {
         name: p.name, age: p.age, quality: p.quality, position: p.position,
         attrs: { ...p.attrs }, found: p.found, sightings: 1,
-      });
+      };
+      if (!entry.name && lastHeader
+        && (!lastHeader.quality || !entry.quality || lastHeader.quality === entry.quality)
+        && (!lastHeader.age || !entry.age || lastHeader.age === entry.age)) {
+        entry.name = lastHeader.name;
+        if (!entry.position && lastHeader.position) entry.position = lastHeader.position;
+      }
+      merged.push(entry);
     }
   }
   return merged;
@@ -179,13 +220,27 @@ function loadTesseract() {
 
 // Downscale + grayscale + auto-invert (Top Eleven UI is light text on dark).
 // `source` is anything drawImage accepts; w/h are its natural dimensions.
-export function preprocessSource(source, w, h, maxWidth = 1600) {
-  const scale = Math.min(1, maxWidth / w);
+// `rotate` (0 | 90 | -90 degrees) handles portrait-stored recordings of the
+// landscape game — iPhone screen recordings save sideways pixels.
+export function preprocessSource(source, w, h, maxWidth = 1600, rotate = 0) {
+  const outW = rotate ? h : w;
+  const outH = rotate ? w : h;
+  const scale = Math.min(1, maxWidth / outW);
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(w * scale);
-  canvas.height = Math.round(h * scale);
+  canvas.width = Math.round(outW * scale);
+  canvas.height = Math.round(outH * scale);
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  ctx.save();
+  if (rotate) {
+    const dw = Math.round(w * scale);
+    const dh = Math.round(h * scale);
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotate * Math.PI) / 180);
+    ctx.drawImage(source, -dw / 2, -dh / 2, dw, dh);
+  } else {
+    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  }
+  ctx.restore();
   const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = img.data;
   let sum = 0;
@@ -216,11 +271,40 @@ export async function createOcrSession(onProgress) {
       if (m.status !== 'recognizing text') onProgress?.('Loading OCR engine…', null);
     },
   });
+  // How "informative" a parse is, for picking the best rotation.
+  const score = (p) => p.found * 3 + (p.name ? 2 : 0) + (p.age ? 1 : 0) + (p.quality ? 1 : 0) + (p.position ? 1 : 0);
+
+  let lockedRotation = null; // learned once per session, reused for later frames
+
   return {
     async recognize(source, w, h, maxWidth) {
       const canvas = preprocessSource(source, w, h, maxWidth);
       const { data } = await worker.recognize(canvas);
       return parsePlayerText(data.text);
+    },
+    // Recognize trying rotations when the frame is portrait (the game is
+    // landscape-only, so portrait pixels mean a sideways recording).
+    async recognizeAuto(source, w, h, maxWidth) {
+      if (w >= h) return this.recognize(source, w, h, maxWidth);
+      // Rotated frames pack the full landscape UI into the long edge — OCR the
+      // small skill digits at higher resolution.
+      const rotatedMax = Math.max(maxWidth || 1600, 2000);
+      if (lockedRotation !== null) {
+        const canvas = preprocessSource(source, w, h, rotatedMax, lockedRotation);
+        const { data } = await worker.recognize(canvas);
+        return parsePlayerText(data.text);
+      }
+      let best = null;
+      let bestRot = 0;
+      for (const rot of [-90, 90, 0]) {
+        const canvas = preprocessSource(source, w, h, rotatedMax, rot);
+        const { data } = await worker.recognize(canvas);
+        const p = parsePlayerText(data.text);
+        if (!best || score(p) > score(best)) { best = p; bestRot = rot; }
+        if (p.found >= 10) break; // confident — stop trying
+      }
+      if (best.found >= 6) lockedRotation = bestRot;
+      return best;
     },
     terminate: () => worker.terminate(),
   };
@@ -231,7 +315,7 @@ export async function recognizeScreenshot(file, onProgress) {
   try {
     onProgress?.('Reading screenshot…', null);
     const bitmap = await createImageBitmap(file);
-    return await session.recognize(bitmap, bitmap.width, bitmap.height);
+    return await session.recognizeAuto(bitmap, bitmap.width, bitmap.height);
   } finally {
     await session.terminate();
   }
@@ -283,7 +367,7 @@ export async function processRecording(file, onProgress) {
   try {
     await eachVideoFrame(file, {}, async (video, i, total) => {
       onProgress?.(`Reading frame ${i + 1} of ${total}…`, (i + 1) / total);
-      parses.push(await session.recognize(video, video.videoWidth, video.videoHeight, 1200));
+      parses.push(await session.recognizeAuto(video, video.videoWidth, video.videoHeight, 1400));
     });
   } finally {
     await session.terminate();
