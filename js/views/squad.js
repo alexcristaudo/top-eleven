@@ -48,9 +48,17 @@ export function renderSquad(view) {
             <div class="meta">Age ${esc(p.age)}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
           </div>
           <div class="quality">${esc(p.quality)}%</div>
+          <button class="btn secondary small" data-edit="${esc(p.id)}" aria-label="Edit ${esc(p.name)}">✎</button>
         </div>`).join('') + `</div>`;
     for (const row of listEl.querySelectorAll('.player-row')) {
       row.addEventListener('click', () => { location.hash = `#/player/${row.dataset.id}`; });
+    }
+    for (const btn of listEl.querySelectorAll('[data-edit]')) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation(); // don't navigate to the player page
+        const p = getPlayers().find((x) => x.id === btn.dataset.edit);
+        if (p) drawEditor(p);
+      });
     }
     drawCompare();
   }
@@ -330,4 +338,12 @@ export function renderSquad(view) {
   });
 
   drawList();
+
+  // Arriving from a player page's "Edit player" button: open their editor.
+  const editOnArrival = sessionStorage.getItem('te-manager.edit-on-arrival');
+  if (editOnArrival) {
+    sessionStorage.removeItem('te-manager.edit-on-arrival');
+    const p = getPlayers().find((x) => x.id === editOnArrival);
+    if (p) drawEditor(p);
+  }
 }

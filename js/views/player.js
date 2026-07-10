@@ -1,5 +1,5 @@
 // Per-player development page: verdict, weaknesses, drill session, role fit.
-import { getPlayer, getPlayers, upsertPlayer } from '../store.js';
+import { getPlayer, getPlayers, upsertPlayer, deletePlayer } from '../store.js';
 import { ROLES } from '../data/roles.js';
 import { developmentPlan, roleFit, attrLabel, classifyTrainerTest } from '../logic/analysis.js';
 import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
@@ -87,7 +87,24 @@ export function renderPlayer(view, id) {
       <p class="hint">Weighted attribute score per position — a higher score than the current role suggests retraining.</p>
       ${fits.map((f) => meterRow(`${f.pos}`, f.score, Math.max(...fits.map((x) => x.score)) * 1.1)).join('')}
     </div>` : ''}
+
+    <div class="btn-row">
+      <button class="btn secondary" id="p-edit">✎ Edit player</button>
+      <button class="btn danger" id="p-delete">Delete player</button>
+    </div>
   `;
+
+  view.querySelector('#p-delete').addEventListener('click', () => {
+    if (confirm(`Delete ${p.name}? This also removes their fast-trainer test history.`)) {
+      deletePlayer(p.id);
+      location.hash = '#/squad';
+    }
+  });
+  view.querySelector('#p-edit').addEventListener('click', () => {
+    // The editor lives on the Squad page; remember who to open it for.
+    sessionStorage.setItem('te-manager.edit-on-arrival', p.id);
+    location.hash = '#/squad';
+  });
 
   // ---------- Fast-trainer test recording ----------
   const resultsEl = view.querySelector('#ft-results');
