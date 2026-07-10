@@ -2,7 +2,7 @@
 import { ATTRIBUTES, ATTR_KEYS, attrLabel } from '../data/attributes.js';
 import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
-import { getFormation } from '../data/formations.js';
+import { getFormation, FORMATIONS } from '../data/formations.js';
 import { ageSlabFactor, TEST_CONDITION_COST, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
 
 // ---------- Fast-trainer / development ----------
@@ -247,6 +247,26 @@ export function bestXI(formation, players) {
     : 0;
   const missing = slots.filter((s) => !s.player).map((s) => s.pos);
   return { slots, bench, avgQuality, missing };
+}
+
+// Rank every formation by how well THIS squad fills it. Coverage dominates:
+// the in-game out-of-position penalty is brutal, so a shape you can fully
+// staff beats a "stronger" shape with holes. Within equal coverage, the
+// average quality of the best XI decides (alt-position slots at a small
+// discount, since players perform slightly worse there).
+export function rankFormations(players) {
+  return FORMATIONS
+    .map((formation) => {
+      const xi = bestXI(formation, players);
+      let total = 0;
+      for (const s of xi.slots) {
+        if (!s.player) continue;
+        const exact = s.player.position === s.pos;
+        total += (s.player.quality || 0) * (exact ? 1 : 0.92);
+      }
+      return { formation, xi, score: total / 11, missing: xi.missing.length };
+    })
+    .sort((a, b) => a.missing - b.missing || b.score - a.score);
 }
 
 // Condition planning: Top Eleven regenerates condition on a 15-minute tick
