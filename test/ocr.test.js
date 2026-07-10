@@ -1,7 +1,7 @@
 // parsePlayerText: turning noisy OCR output into a player draft.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlayerText, mergeSightings, planSquadChanges } from '../js/logic/ocr.js';
+import { parsePlayerText, mergeSightings, planSquadChanges, sameName } from '../js/logic/ocr.js';
 
 const CLEAN_PROFILE = `
 Marco Rossi
@@ -157,6 +157,43 @@ test('mergeSightings: groups repeat frames of the same player, keeps distinct pl
 test('mergeSightings: drops frames below the minimum data threshold', () => {
   const merged = mergeSightings([{ attrs: { speed: 90 }, found: 1, name: null }]);
   assert.equal(merged.length, 0);
+});
+
+// Name variants taken from a real user import that produced duplicates.
+test('sameName: matches OCR junk-token and accent variants, rejects different players', () => {
+  assert.ok(sameName('Raoul Konyuy', 'Ili Raoul Konyuy'));      // junk prefix token
+  assert.ok(sameName('Eder Cuesta', 'Eder Cuesta Nr'));         // junk suffix token
+  assert.ok(sameName('Cipriano Cuscunà', 'cipriano Cuscuna'));  // accent + case
+  assert.ok(sameName('Enrico Lago', 'Enrico Lago'));
+  assert.ok(sameName('Enrico Lago', 'Enrico Lagos'));           // 1-char misread
+  assert.ok(!sameName('Enrico Lago', 'Pavel Beres'));
+  assert.ok(!sameName('Raoul Konyuy', 'Eder Cuesta'));
+  assert.ok(!sameName('', 'Eder Cuesta'));
+});
+
+test('mergeSightings: folds name-variant entries in a final dedupe pass', () => {
+  // Same player: full read, then a partial read with junk-token name and a
+  // couple of misread digits (mirrors the real duplicate squad export).
+  const full = { name: 'Raoul Konyuy', age: 26, quality: 103, position: 'MC', found: 15,
+    attrs: { tackling: 60, marking: 55, positioning: 70, heading: 50, bravery: 65, passing: 90, dribbling: 85, crossing: 70, shooting: 80, finishing: 75, speed: 88, strength: 72, fitness: 91, aggression: 60, creativity: 95 } };
+  const partial = { name: 'Ili Raoul Konyuy', age: 26, quality: 103, position: null, found: 12,
+    attrs: { tackling: 60, marking: 55, positioning: 70, heading: 50, bravery: 65, passing: 90, dribbling: 85, crossing: 70, shooting: 30, finishing: 75, speed: 88, strength: 72 } };
+  const other = { name: 'Pavel Beres', age: 25, quality: 102, position: 'MC', found: 15,
+    attrs: { tackling: 70, marking: 65, positioning: 60, heading: 55, bravery: 60, passing: 85, dribbling: 80, crossing: 60, shooting: 75, finishing: 70, speed: 80, strength: 78, fitness: 88, aggression: 65, creativity: 90 } };
+  const merged = mergeSightings([full, partial, other]);
+  assert.equal(merged.length, 2);
+  const konyuy = merged.find((m) => m.name === 'Raoul Konyuy'); // cleaner variant kept
+  assert.ok(konyuy, `expected clean name, got ${merged.map((m) => m.name)}`);
+  assert.equal(konyuy.sightings, 2);
+});
+
+test('planSquadChanges: fuzzy name match updates instead of duplicating', () => {
+  const existing = [{ id: 'x', name: 'Eder Cuesta', position: 'MC', age: 18, quality: 109, attrs: { passing: 80 } }];
+  const plan = planSquadChanges(existing, [
+    { name: 'Eder Cuesta Nr', age: 18, quality: 110, attrs: { passing: 82 }, found: 12, sightings: 1 },
+  ]);
+  assert.equal(plan[0].type, 'update');
+  assert.equal(plan[0].player.id, 'x');
 });
 
 test('planSquadChanges: classifies add / update / unchanged with field diffs', () => {
