@@ -17,7 +17,7 @@ An unofficial, extensive strategic companion for [Top Eleven](https://www.topele
 - **Tactics centre** — 13-formation encyclopedia with strengths/weaknesses, a **Best XI builder** (pick a shape → your strongest lineup on the pitch, bench, and coverage gaps), a counter-formation tool (pick the opponent's shape → best counters, full orientation settings, and which of *your* players fit), and a reference for every match-prep setting.
 - **Match-prep tools** — condition planner (will a player hit 90% by kickoff, and how many green packs if not) and a side-by-side player comparison for transfer decisions.
 - **Scouting log** — record each rival's formation, result and notes; their history and the recommended counter are one tap away next meeting.
-- **Season planner** — a persistent season checklist (start / mid-season / final week routines) and a token budget tracker with net balance and category breakdown.
+- **Season planner** — a persistent season checklist (start / mid-season / final week routines), a token budget tracker with net balance and category breakdown, and a **free-to-play auction bid valuator** that prices a target in tokens from age, star level, extras (special ability, playstyle, quality ending in 4/9) and your squad's positional need.
 - **Strategy guides** — token economy, auction craft, condition/pack management, squad building & fast-trainer pipelines, competition strategy, associations, match-day craft, facility build order, and a season-cycle checklist.
 
 ## Use it on iPhone
