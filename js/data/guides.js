@@ -38,6 +38,8 @@ export const GUIDES = [
         <li><strong>Bid in the final seconds of each round.</strong> Early bids only advertise your interest and pull in rivals.</li>
         <li><strong>Watch the bidder count.</strong> Two or more managers deep after round 3? Let it go — an identical player will appear within days.</li>
         <li><strong>Value marker:</strong> 18–19 year olds at high % with 1–2 special abilities go for silly prices. The same profile without an ability is often 70% cheaper and trains the ability later.</li>
+        <li><strong>Buy qualities ending in 4 or 9</strong> — those players are one training step from their next star, so you get the star jump (and its market-value bump) almost free.</li>
+        <li>Selling returns roughly the player's cash value, plus a cut of the tokens bidders spent — another reason to develop-and-sell fast trainers rather than hoard them.</li>
       </ul>
       <h4>Negotiations</h4>
       <ul>
@@ -114,6 +116,25 @@ export const GUIDES = [
       </ul>`,
   },
   {
+    id: 'tierup',
+    icon: '💎',
+    title: 'Personal trainer, tier-up & gems',
+    summary: 'What to do when normal training stops being enough — and when paying is actually worth it.',
+    body: `
+      <h4>Personal trainer</h4>
+      <ul>
+        <li>Found on the player's Skills tab: tokens convert directly into skill points, with young players getting more points per token.</li>
+        <li>Rule of thumb: it's only good value on <strong>measured fast trainers aged 18–21</strong> — the same players who convert normal training best. Paying tokens to push a slow or ageing player is burning the budget.</li>
+        <li>Use the calculator on the Training tab to sanity-check any offer before spending.</li>
+      </ul>
+      <h4>Tier-up and gems</h4>
+      <ul>
+        <li>Normal training and the personal trainer cap out at <strong>180% quality</strong>. Beyond that, players tier up with gems that boost their <em>key attributes</em>.</li>
+        <li>Gem tiers: rare +10%, elite +30%, stellar +50%, master +80%, epic +120% (to key attributes).</li>
+        <li>Strategy: tier-up is endgame polish for one-club keepers — never tier up a player you might sell, and never before his position, playstyle and special ability are settled.</li>
+      </ul>`,
+  },
+  {
     id: 'competitions',
     icon: '🏆',
     title: 'Competition strategy — League, Champions League, Cup',
@@ -176,6 +197,8 @@ export const GUIDES = [
       <h4>Watching live</h4>
       <ul>
         <li>Attending the match gives your team a small but real boost — show up for finals and derbies.</li>
+        <li><strong>Activate a teamplay bonus during the match</strong>: it plays at 1.5× its value for 20 minutes (an 8% Attack bonus becomes 12%). Save the activation for when you need it — chasing a goal or protecting a lead.</li>
+        <li>Set a <strong>win bonus</strong> before big matches — it feeds morale, and morale feeds ratings.</li>
         <li>Losing at half-time as the better team? Raise mentality one notch and/or switch focus to the flank where your winger is winning his duel — don't rip up the whole tactic.</li>
         <li>Winning by two? Drop to Normal/Defensive around minute 70 and red-arrow the wingers; conserve condition for the next fixture.</li>
       </ul>

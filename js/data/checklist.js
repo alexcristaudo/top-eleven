@@ -7,6 +7,7 @@ export const SEASON_CHECKLIST = [
       { id: 'start-renew', text: 'Renew every expiring contract (avoids morale penalties)' },
       { id: 'start-cupdraw', text: 'Check the Cup draw before making big signings (draw seeds on squad quality)' },
       { id: 'start-buy-young', text: 'Buy 18-year-old fast trainers while the market is flooded and cheap' },
+      { id: 'start-youth', text: 'Visit the Young Talent Center on days 3–7: take the 2–3 free youths, sign token youths EARLY in the season (late signings lose a star at rollover)' },
       { id: 'start-training-plan', text: 'Set a training plan per player (Player pages generate one)' },
       { id: 'start-facilities', text: 'Queue the next training-facility upgrade' },
       { id: 'start-association', text: 'Confirm association lineup and availability for the first weekend' },

@@ -1,7 +1,7 @@
 // TE Manager service worker — cache-first with versioned precache.
 // vendor/tesseract assets are intentionally NOT precached: they are large and
 // lazy-loaded on first screenshot import, then kept by the runtime cache below.
-const VERSION = 'te-manager-v13'; // keep in step with js/version.js
+const VERSION = 'te-manager-v14'; // keep in step with js/version.js
 const ASSETS = [
   './',
   './index.html',
@@ -19,6 +19,9 @@ const ASSETS = [
   './js/data/guides.js',
   './js/data/checklist.js',
   './js/data/trainertest.js',
+  './js/data/teamplay.js',
+  './js/data/playstyles.js',
+  './js/data/abilities.js',
   './js/views/ui.js',
   './js/views/dashboard.js',
   './js/views/squad.js',

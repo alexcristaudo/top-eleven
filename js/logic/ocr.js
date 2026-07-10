@@ -40,6 +40,7 @@ export function parsePlayerText(text) {
   let qualityPct = null;
   let name = null;
   let position = null;
+  let specialAbility = null;
 
   const POS_RE = new RegExp(`(?:^|[^A-Z0-9])(${POSITIONS.join('|')})(?:[^A-Z0-9]|$)`);
 
@@ -62,6 +63,15 @@ export function parsePlayerText(text) {
       if (m) {
         const v = parseInt(m[1], 10);
         if (v >= 16 && v <= 45) age = v;
+      }
+    }
+
+    // Special ability from the profile header ("Special ability: Playmaker").
+    if (specialAbility === null) {
+      const m = line.match(/special\s*abilit\w*\W*([A-Za-z][A-Za-z' -]{2,30})/i);
+      if (m) {
+        const raw = m[1].trim().toLowerCase();
+        if (!/^non?e?$/.test(raw)) specialAbility = raw;
       }
     }
 
@@ -117,7 +127,7 @@ export function parsePlayerText(text) {
     quality = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
   }
 
-  return { attrs, age, quality, name, position, found: values.length };
+  return { attrs, age, quality, name, position, specialAbility, found: values.length };
 }
 
 // ---------- Recording support: merge frame parses into distinct players ----------
@@ -184,6 +194,7 @@ function mergeInto(target, p) {
   if (!target.age && p.age) target.age = p.age;
   if (!target.quality && p.quality) target.quality = p.quality;
   if (!target.position && p.position) target.position = p.position;
+  if (!target.specialAbility && p.specialAbility) target.specialAbility = p.specialAbility;
   for (const [k, v] of Object.entries(p.attrs)) {
     if (target.attrs[k] === undefined) target.attrs[k] = v;
   }
@@ -214,6 +225,7 @@ export function mergeSightings(parses, minFound = 6) {
     else {
       const entry = {
         name: p.name, age: p.age, quality: p.quality, position: p.position,
+        specialAbility: p.specialAbility || null,
         attrs: { ...p.attrs }, found: p.found, sightings: 1,
       };
       if (!entry.name && lastHeader

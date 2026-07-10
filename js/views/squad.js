@@ -2,7 +2,9 @@
 import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
-import { fastTrainerRating } from '../logic/analysis.js';
+import { fastTrainerRating, saCoverage } from '../logic/analysis.js';
+import { SPECIAL_ABILITIES, matchAbility, abilityLabel } from '../data/abilities.js';
+import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../data/playstyles.js';
 import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
 
@@ -24,6 +26,7 @@ export function renderSquad(view) {
     <div id="scan-status"></div>
     <div id="video-review"></div>
     <div id="editor"></div>
+    <div id="sa-coverage"></div>
     <div id="compare-card"></div>
   `;
 
@@ -44,8 +47,8 @@ export function renderSquad(view) {
         <div class="player-row" data-id="${esc(p.id)}">
           ${posBadge(p.position)}
           <div class="grow">
-            <div class="name">${esc(p.name)}</div>
-            <div class="meta">Age ${esc(p.age)}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
+            <div class="name">${esc(p.name)}${[4, 9].includes(Math.round(p.quality) % 10) ? ' <span class="chip green" title="One step from the next star">★+1 soon</span>' : ''}</div>
+            <div class="meta">Age ${esc(p.age)}${p.specialAbility ? ' · ' + esc(abilityLabel(p.specialAbility)) : ''}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
           </div>
           <div class="quality">${esc(p.quality)}%</div>
           <button class="btn secondary small" data-edit="${esc(p.id)}" aria-label="Edit ${esc(p.name)}">✎</button>
@@ -61,6 +64,25 @@ export function renderSquad(view) {
       });
     }
     drawCompare();
+    drawSaCoverage();
+  }
+
+  const saEl = view.querySelector('#sa-coverage');
+  function drawSaCoverage() {
+    const players = getPlayers();
+    if (!players.length) { saEl.innerHTML = ''; return; }
+    const kit = saCoverage(players);
+    const missing = kit.filter((k) => !k.covered).length;
+    saEl.innerHTML = `
+      <div class="card">
+        <h3>Special-ability coverage</h3>
+        <p class="hint">A triggered special ability makes the player count one star higher for that action. The recommended kit${missing ? ` — <strong>${missing} gap${missing === 1 ? '' : 's'}</strong>` : ' — fully covered ✅'}:</p>
+        ${kit.map((k) => `
+          <p>${k.covered ? '✅' : '❌'} <strong>${esc(k.label)}</strong> ×${k.want}
+            ${k.holders.length ? `— ${k.holders.map((h) => esc(h.name)).join(', ')}` : '<span class="chip red">nobody</span>'}
+            <br><span class="hint">${esc(k.why)}</span></p>`).join('')}
+        <p class="hint">Set each player's special ability in the edit form (✎), or import it automatically from screenshots/recordings.</p>
+      </div>`;
   }
 
   function drawEditor(player, draft = null) {
@@ -83,6 +105,25 @@ export function renderSquad(view) {
           <label class="field"><span>Quality % (overall)</span><input type="number" id="f-quality" min="1" max="200" value="${esc(p.quality)}"></label>
           <label class="field"><span>Alt positions (comma-sep, e.g. DL,ML)</span><input type="text" id="f-alt" value="${esc((p.altPositions || []).join(','))}"></label>
         </div>
+        <div class="field-row">
+          <label class="field"><span>Special ability</span>
+            <select id="f-sa">
+              <option value="">None</option>
+              ${SPECIAL_ABILITIES.map((a) => `<option value="${a.id}" ${p.specialAbility === a.id ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field"><span>Playstyle</span>
+            <select id="f-playstyle">
+              <option value="">None</option>
+              ${PLAYSTYLES.map((s) => `<option value="${s.id}" ${p.playstyle === s.id ? 'selected' : ''}>${esc(s.label)} (${esc(s.category)})</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <label class="field"><span>Playstyle level</span>
+          <select id="f-playstyle-level">
+            ${PLAYSTYLE_LEVELS.map((l) => `<option ${p.playstyleLevel === l ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </label>
         <h4>Attributes (optional — enables precise weakness analysis)</h4>
         <p class="hint">Enter the % value shown on each skill in-game. Leave blank to skip.</p>
         ${GROUPS.map((g) => `
@@ -109,12 +150,16 @@ export function renderSquad(view) {
         if (Number.isFinite(v)) attrs[inp.dataset.attr] = v;
       }
       upsertPlayer({
+        ...p,
         id: p.id,
         name,
         position: editorEl.querySelector('#f-pos').value,
         altPositions: editorEl.querySelector('#f-alt').value.split(',').map((s) => s.trim().toUpperCase()).filter((s) => POSITIONS.includes(s)),
         age: parseInt(editorEl.querySelector('#f-age').value, 10) || 18,
         quality: parseFloat(editorEl.querySelector('#f-quality').value) || 0,
+        specialAbility: editorEl.querySelector('#f-sa').value || null,
+        playstyle: editorEl.querySelector('#f-playstyle').value || null,
+        playstyleLevel: editorEl.querySelector('#f-playstyle-level').value,
         attrs,
       });
       editorEl.innerHTML = '';
@@ -155,6 +200,8 @@ export function renderSquad(view) {
       if (result.age) draft.age = result.age;
       if (result.quality) draft.quality = result.quality;
       if (result.position) draft.position = result.position;
+      const sa = matchAbility(result.specialAbility);
+      if (sa) draft.specialAbility = sa;
       drawEditor(null, draft);
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
@@ -306,6 +353,7 @@ export function renderSquad(view) {
             altPositions: [],
             age: item.sighting.age || 18,
             quality: item.sighting.quality || 0,
+            specialAbility: matchAbility(item.sighting.specialAbility),
             attrs: item.sighting.attrs,
           });
           added++;

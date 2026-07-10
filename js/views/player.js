@@ -3,6 +3,9 @@ import { getPlayer, getPlayers, upsertPlayer, deletePlayer } from '../store.js';
 import { ROLES } from '../data/roles.js';
 import { developmentPlan, roleFit, attrLabel, classifyTrainerTest } from '../logic/analysis.js';
 import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
+import { PLAYSTYLES, playstylesForPosition } from '../data/playstyles.js';
+import { abilityLabel } from '../data/abilities.js';
+import { DRILLS } from '../data/drills.js';
 import { esc, posBadge, meterRow } from './ui.js';
 
 export function renderPlayer(view, id) {
@@ -49,6 +52,33 @@ export function renderPlayer(view, id) {
         </label>
       </div>
       <div id="ft-results"></div>
+    </div>
+
+    <div class="card">
+      <h3>Playstyle</h3>
+      ${p.playstyle ? (() => {
+        const style = PLAYSTYLES.find((s) => s.id === p.playstyle);
+        if (!style) return '<p class="hint">Unknown playstyle set.</p>';
+        const drills = style.drills.map((id) => DRILLS.find((d) => d.id === id)).filter(Boolean);
+        return `
+          <p><span class="chip green">${esc(style.label)}</span> <span class="chip">${esc(p.playstyleLevel || 'Basic')}</span></p>
+          <p>${esc(style.description)}</p>
+          ${(p.playstyleLevel || 'Basic') !== 'Master' ? `
+            <h4>Drills that level it up</h4>
+            <p>${drills.map((d) => `<span class="chip green">${esc(d.name)} (${d.cost}%)</span>`).join(' ')}</p>
+            <p class="hint">Work these into the weekly rotation until Master.</p>` : '<p class="hint">Mastered — nothing left to level.</p>'}
+        `;
+      })() : (() => {
+        const options = playstylesForPosition(p.position);
+        return options.length ? `
+          <p class="hint">No playstyle set. Best fits for a ${esc(p.position)}:</p>
+          ${options.map((s) => `
+            <p><strong>${esc(s.label)}</strong> — ${esc(s.description)}<br>
+            <span class="hint">Levelled by: ${s.drills.map((id) => { const d = DRILLS.find((x) => x.id === id); return d ? esc(d.name) : id; }).join(', ')}</span></p>`).join('')}
+          <p class="hint">Unlock it in the game (player → Playstyle tab), then record it via the edit form (✎ on the Squad page).</p>
+        ` : '<p class="hint">No defined playstyles for this position — goalkeepers and some roles don’t use them.</p>';
+      })()}
+      ${p.specialAbility ? `<p>Special ability: <span class="chip blue">${esc(abilityLabel(p.specialAbility))}</span></p>` : ''}
     </div>
 
     <div class="card">
