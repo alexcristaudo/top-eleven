@@ -34,15 +34,15 @@ export function renderPlayer(view, id) {
       <h3>Fast-trainer test</h3>
       <p class="hint">Training speed is a hidden per-player multiplier — being young does NOT make a player a fast trainer. Measure it:</p>
       <ol>
-        <li>In the game, set this player to learn a <strong>new role or special ability</strong> and note the learning progress %.</li>
+        <li>In the game, set this player to learn a <strong>new role or special ability</strong> (it needs 50 skill points).</li>
         <li>With condition near 100%, run <strong>one session of 6× Sprint</strong> drills.</li>
-        <li>Note the new progress % and enter the <strong>gain</strong> below.</li>
-        <li>Let condition recover and repeat — <strong>${RECOMMENDED_TESTS} tests</strong> give a reliable verdict (${MIN_TESTS_FOR_VERDICT} for a provisional one).</li>
+        <li>Enter how many <strong>points</strong> the training awarded (0, +1, +2, +3…).</li>
+        <li>Let condition recover and repeat — <strong>${RECOMMENDED_TESTS} tests</strong> give a reliable verdict (${MIN_TESTS_FOR_VERDICT} for a provisional one), since single sessions land on whole points.</li>
       </ol>
       <p class="hint">${esc(TEST_AGE_NOTE)}</p>
       <div class="field-row">
-        <label class="field"><span>Progress gained this test (%)</span>
-          <input type="number" id="ft-gain" min="0" max="50" step="0.1" placeholder="e.g. 7.5">
+        <label class="field"><span>Points earned this test (of 50)</span>
+          <input type="number" id="ft-gain" min="0" max="10" step="1" placeholder="e.g. 2">
         </label>
         <label class="field"><span>&nbsp;</span>
           <button class="btn" id="ft-add">Record test</button>
@@ -116,12 +116,12 @@ export function renderPlayer(view, id) {
       <p><span class="chip blue">${entries.length}/${RECOMMENDED_TESTS} tests recorded</span>
       ${t.tested ? `
         <span class="chip ${t.class.chip}">${esc(t.class.label)}${t.provisional ? ' (provisional)' : ''}</span>
-        <span class="chip">avg ${t.avgGain.toFixed(1)}%/test · ${t.normalized.toFixed(1)}%/15% cond age-adjusted</span>
+        <span class="chip">avg ${t.avgPoints.toFixed(1)} pts/test · ${t.normalized.toFixed(1)} age-adjusted</span>
       ` : entries.length ? `<span class="chip yellow">${MIN_TESTS_FOR_VERDICT - entries.length} more test${MIN_TESTS_FOR_VERDICT - entries.length === 1 ? '' : 's'} for a verdict</span>` : ''}</p>
       ${t.tested ? `<p>${esc(t.class.note)}</p>` : ''}
       ${t.tested && t.noisy ? '<div class="warn-note">Results vary a lot between tests — double-check you used the same 6-sprint session and near-full condition each time.</div>' : ''}
       ${entries.length ? `<p>${entries.map((e, i) =>
-        `<span class="chip">#${i + 1}: ${esc(e.gain)}% <button class="btn danger small" data-ft-del="${i}" style="padding:2px 7px">✕</button></span>`).join(' ')}</p>` : ''}
+        `<span class="chip">#${i + 1}: +${esc(Number.isFinite(e.points) ? e.points : (e.gain / 2).toFixed(1))} pts <button class="btn danger small" data-ft-del="${i}" style="padding:2px 7px">✕</button></span>`).join(' ')}</p>` : ''}
     `;
     for (const btn of resultsEl.querySelectorAll('[data-ft-del]')) {
       btn.addEventListener('click', () => {
@@ -134,11 +134,11 @@ export function renderPlayer(view, id) {
   }
   view.querySelector('#ft-add').addEventListener('click', () => {
     const input = view.querySelector('#ft-gain');
-    const gain = parseFloat(input.value);
-    if (!Number.isFinite(gain) || gain < 0 || gain > 50) { input.focus(); return; }
+    const points = parseInt(input.value, 10);
+    if (!Number.isFinite(points) || points < 0 || points > 10) { input.focus(); return; }
     const cur = getPlayer(id);
     cur.trainerTests = cur.trainerTests || [];
-    cur.trainerTests.push({ gain, date: Date.now() });
+    cur.trainerTests.push({ points, date: Date.now() });
     upsertPlayer(cur);
     renderPlayer(view, id);
   });

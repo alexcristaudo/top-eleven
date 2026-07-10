@@ -3,34 +3,40 @@ import { ATTRIBUTES, ATTR_KEYS, attrLabel } from '../data/attributes.js';
 import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
 import { getFormation, FORMATIONS } from '../data/formations.js';
-import { ageSlabFactor, TEST_CONDITION_COST, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
+import { ageSlabFactor, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
 
 // ---------- Fast-trainer / development ----------
 
-// Classify a player from recorded fast-trainer test entries (gains in % of
-// role/SA progress from one 6-sprint session each). Gains are normalized to
-// "% per 15% condition" and corrected for the age slab so the classification
-// always compares against the 18–21 baseline.
+// Classify a player from recorded fast-trainer test entries: the SKILL POINTS
+// (out of the 50 a new role/SA needs) that one 6-sprint session awarded —
+// whole numbers, typically 0 to +3. The average is corrected for the age slab
+// so the classification always compares against the 18–21 baseline.
+// Legacy entries recorded as a progress percentage migrate at 1 point = 2%.
+function entryPoints(e) {
+  if (Number.isFinite(e.points)) return e.points;
+  if (Number.isFinite(e.gain)) return e.gain / 2; // old %-based entries
+  return NaN;
+}
+
 export function classifyTrainerTest(player) {
-  const entries = (player.trainerTests || []).filter((e) => Number.isFinite(e.gain) && e.gain >= 0);
+  const entries = (player.trainerTests || []).filter((e) => entryPoints(e) >= 0);
   if (entries.length < MIN_TESTS_FOR_VERDICT) {
     return { tested: false, testsDone: entries.length, testsNeeded: MIN_TESTS_FOR_VERDICT, recommended: RECOMMENDED_TESTS };
   }
-  const avgGain = entries.reduce((s, e) => s + e.gain, 0) / entries.length;
-  const gainPer15 = avgGain / (TEST_CONDITION_COST / 15);
-  const normalized = gainPer15 / ageSlabFactor(player.age || 21);
+  const points = entries.map(entryPoints);
+  const avgPoints = points.reduce((s, p) => s + p, 0) / points.length;
+  const normalized = avgPoints / ageSlabFactor(player.age || 21);
   const cls = TRAINER_CLASSES.find((c) => normalized >= c.min) || TRAINER_CLASSES[TRAINER_CLASSES.length - 1];
-  const spread = Math.max(...entries.map((e) => e.gain)) - Math.min(...entries.map((e) => e.gain));
+  const spread = Math.max(...points) - Math.min(...points);
   return {
     tested: true,
     testsDone: entries.length,
     recommended: RECOMMENDED_TESTS,
     provisional: entries.length < RECOMMENDED_TESTS,
-    avgGain,
-    gainPer15,
+    avgPoints,
     normalized,
     class: cls,
-    noisy: entries.length >= 2 && spread > Math.max(2, avgGain), // wildly inconsistent inputs
+    noisy: entries.length >= 2 && spread > Math.max(2, avgPoints * 2), // wildly inconsistent inputs
   };
 }
 
