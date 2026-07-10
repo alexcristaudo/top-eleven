@@ -263,23 +263,32 @@ export function preprocessSource(source, w, h, maxWidth = 1600, rotate = 0) {
 export async function createOcrSession(onProgress) {
   const T = await loadTesseract();
   const base = new URL('vendor/tesseract/', document.baseURI).href;
+  let label = 'Reading…';
   const worker = await T.createWorker('eng', 1, {
     workerPath: base + 'worker.min.js',
     corePath: base,
     langPath: base + 'lang',
     logger: (m) => {
-      if (m.status !== 'recognizing text') onProgress?.('Loading OCR engine…', null);
+      if (m.status === 'recognizing text') onProgress?.(label, m.progress);
+      else onProgress?.('Loading OCR engine…', null);
     },
   });
+
+  // Safety net: a wedged recognition surfaces as an error, not a silent stall.
+  const withTimeout = (promise, ms = 90000) => Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('OCR timed out on a frame — try a shorter or steadier recording.')), ms)),
+  ]);
   // How "informative" a parse is, for picking the best rotation.
   const score = (p) => p.found * 3 + (p.name ? 2 : 0) + (p.age ? 1 : 0) + (p.quality ? 1 : 0) + (p.position ? 1 : 0);
 
   let lockedRotation = null; // learned once per session, reused for later frames
 
   return {
+    setLabel(text) { label = text; },
     async recognize(source, w, h, maxWidth) {
       const canvas = preprocessSource(source, w, h, maxWidth);
-      const { data } = await worker.recognize(canvas);
+      const { data } = await withTimeout(worker.recognize(canvas));
       return parsePlayerText(data.text);
     },
     // Recognize trying rotations when the frame is portrait (the game is
@@ -291,19 +300,30 @@ export async function createOcrSession(onProgress) {
       const rotatedMax = Math.max(maxWidth || 1600, 2000);
       if (lockedRotation !== null) {
         const canvas = preprocessSource(source, w, h, rotatedMax, lockedRotation);
-        const { data } = await worker.recognize(canvas);
+        const { data } = await withTimeout(worker.recognize(canvas));
         return parsePlayerText(data.text);
       }
+      // Orientation detection runs at LOW resolution — it only needs to tell
+      // which way the text reads, and phones would otherwise sit on the first
+      // frame for a minute doing three full-resolution passes.
+      const outerLabel = label;
       let best = null;
       let bestRot = 0;
-      for (const rot of [-90, 90, 0]) {
-        const canvas = preprocessSource(source, w, h, rotatedMax, rot);
-        const { data } = await worker.recognize(canvas);
+      const trials = [-90, 90, 0];
+      for (let i = 0; i < trials.length; i++) {
+        label = `Detecting orientation (${i + 1}/${trials.length})…`;
+        const canvas = preprocessSource(source, w, h, 1100, trials[i]);
+        const { data } = await withTimeout(worker.recognize(canvas));
         const p = parsePlayerText(data.text);
-        if (!best || score(p) > score(best)) { best = p; bestRot = rot; }
+        if (!best || score(p) > score(best)) { best = p; bestRot = trials[i]; }
         if (p.found >= 10) break; // confident — stop trying
       }
-      if (best.found >= 6) lockedRotation = bestRot;
+      label = outerLabel;
+      if (best.found >= 4) {
+        lockedRotation = bestRot;
+        // Redo this frame properly at full resolution with the locked rotation.
+        return this.recognizeAuto(source, w, h, maxWidth);
+      }
       return best;
     },
     terminate: () => worker.terminate(),
@@ -360,14 +380,66 @@ async function eachVideoFrame(file, { stepSeconds = 0.7, maxFrames = 150 } = {},
   }
 }
 
+// Grayscale thumbnail + block-wise difference for cheap frame-similarity
+// checks. The metric is the MAX per-block mean difference, so a localized
+// change (different digits or name on an otherwise identical layout) still
+// registers strongly. Calibrated on real footage: identical screens score
+// < 0.5, different players on the same layout score > 9.
+const THUMB_SIZE = 48;
+const THUMB_BLOCK = 8;
+
+function frameThumb(source) {
+  const c = document.createElement('canvas');
+  c.width = c.height = THUMB_SIZE;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(source, 0, 0, THUMB_SIZE, THUMB_SIZE);
+  const d = ctx.getImageData(0, 0, THUMB_SIZE, THUMB_SIZE).data;
+  const out = new Float32Array(THUMB_SIZE * THUMB_SIZE);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  }
+  return out;
+}
+
+function thumbDiff(a, b) {
+  let max = 0;
+  const nb = THUMB_SIZE / THUMB_BLOCK;
+  for (let by = 0; by < nb; by++) {
+    for (let bx = 0; bx < nb; bx++) {
+      let sum = 0;
+      for (let y = 0; y < THUMB_BLOCK; y++) {
+        for (let x = 0; x < THUMB_BLOCK; x++) {
+          const i = (by * THUMB_BLOCK + y) * THUMB_SIZE + bx * THUMB_BLOCK + x;
+          sum += Math.abs(a[i] - b[i]);
+        }
+      }
+      max = Math.max(max, sum / (THUMB_BLOCK * THUMB_BLOCK));
+    }
+  }
+  return max;
+}
+
 // Full recording pipeline: sample frames → OCR each → merge into players.
+// Near-identical consecutive frames (user holding one screen) reuse the
+// previous OCR result instead of paying for another recognition pass.
 export async function processRecording(file, onProgress) {
   const session = await createOcrSession(onProgress);
   const parses = [];
+  let prevThumb = null;
+  let prevParse = null;
   try {
     await eachVideoFrame(file, {}, async (video, i, total) => {
-      onProgress?.(`Reading frame ${i + 1} of ${total}…`, (i + 1) / total);
-      parses.push(await session.recognizeAuto(video, video.videoWidth, video.videoHeight, 1400));
+      const msg = `Reading frame ${i + 1} of ${total}…`;
+      session.setLabel(msg);
+      onProgress?.(msg, i / total);
+      const thumb = frameThumb(video);
+      if (prevThumb && prevParse && thumbDiff(thumb, prevThumb) < 4) {
+        parses.push(prevParse); // same screen as last frame — no need to re-OCR
+      } else {
+        prevParse = await session.recognizeAuto(video, video.videoWidth, video.videoHeight, 1400);
+        parses.push(prevParse);
+      }
+      prevThumb = thumb;
     });
   } finally {
     await session.terminate();
