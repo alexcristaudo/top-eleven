@@ -36,7 +36,18 @@
   <script type="module" src="js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+      window.addEventListener('load', async () => {
+        const reg = await navigator.serviceWorker.register('sw.js');
+        reg.update(); // check for a new version on every launch
+        // When an updated service worker takes over, reload once so the new
+        // version is actually what runs (iOS otherwise serves stale caches
+        // across many launches).
+        let hadController = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (hadController) location.reload();
+          hadController = true;
+        });
+      });
     }
   </script>
 </body>

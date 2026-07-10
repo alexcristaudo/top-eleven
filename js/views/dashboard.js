@@ -3,6 +3,7 @@ import { getPlayers } from '../store.js';
 import { fastTrainerRating } from '../logic/analysis.js';
 import { GUIDES } from '../data/guides.js';
 import { esc, posBadge } from './ui.js';
+import { APP_VERSION } from '../version.js';
 
 const TIPS = [
   'Bid in the final seconds of an auction round — early bids just attract rivals.',
@@ -26,7 +27,7 @@ export function renderDashboard(view) {
 
   view.innerHTML = `
     <h2 class="page-title">TE Manager</h2>
-    <p class="page-sub">Your Top Eleven strategy assistant — training, development, tactics and long-game strategy in one place.</p>
+    <p class="page-sub">Your Top Eleven strategy assistant — training, development, tactics and long-game strategy in one place. <span class="chip">${esc(APP_VERSION)}</span></p>
 
     <div class="tiles">
       <div class="tile"><div class="num">${players.length}</div><div class="lbl">Players saved</div></div>
