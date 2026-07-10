@@ -1,7 +1,8 @@
 // Per-player development page: verdict, weaknesses, drill session, role fit.
-import { getPlayer, getPlayers } from '../store.js';
+import { getPlayer, getPlayers, upsertPlayer } from '../store.js';
 import { ROLES } from '../data/roles.js';
-import { developmentPlan, roleFit, attrLabel } from '../logic/analysis.js';
+import { developmentPlan, roleFit, attrLabel, classifyTrainerTest } from '../logic/analysis.js';
+import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
 import { esc, posBadge, meterRow } from './ui.js';
 
 export function renderPlayer(view, id) {
@@ -24,9 +25,30 @@ export function renderPlayer(view, id) {
     <div class="card">
       <h3>Development verdict</h3>
       <p><span class="chip ${plan.verdict.chip}">${esc(plan.verdict.type)}</span>
-         <span class="chip blue">${esc(plan.fastTrainer.label)}</span></p>
+         <span class="chip ${plan.fastTrainer.tested ? 'green' : 'blue'}">${esc(plan.fastTrainer.label)}${plan.fastTrainer.tested ? '' : ' (estimated from age)'}</span></p>
       <p>${esc(plan.verdict.advice)}</p>
-      <p class="hint">${esc(plan.fastTrainer.note)}</p>
+      <p class="hint">${esc(plan.fastTrainer.note)}${plan.fastTrainer.tested ? '' : ' Age is only a rough proxy — run the fast-trainer test below for the real answer.'}</p>
+    </div>
+
+    <div class="card" id="ft-test-card">
+      <h3>Fast-trainer test</h3>
+      <p class="hint">Training speed is a hidden per-player multiplier — being young does NOT make a player a fast trainer. Measure it:</p>
+      <ol>
+        <li>In the game, set this player to learn a <strong>new role or special ability</strong> and note the learning progress %.</li>
+        <li>With condition near 100%, run <strong>one session of 6× Sprint</strong> drills.</li>
+        <li>Note the new progress % and enter the <strong>gain</strong> below.</li>
+        <li>Let condition recover and repeat — <strong>${RECOMMENDED_TESTS} tests</strong> give a reliable verdict (${MIN_TESTS_FOR_VERDICT} for a provisional one).</li>
+      </ol>
+      <p class="hint">${esc(TEST_AGE_NOTE)}</p>
+      <div class="field-row">
+        <label class="field"><span>Progress gained this test (%)</span>
+          <input type="number" id="ft-gain" min="0" max="50" step="0.1" placeholder="e.g. 7.5">
+        </label>
+        <label class="field"><span>&nbsp;</span>
+          <button class="btn" id="ft-add">Record test</button>
+        </label>
+      </div>
+      <div id="ft-results"></div>
     </div>
 
     <div class="card">
@@ -66,4 +88,42 @@ export function renderPlayer(view, id) {
       ${fits.map((f) => meterRow(`${f.pos}`, f.score, Math.max(...fits.map((x) => x.score)) * 1.1)).join('')}
     </div>` : ''}
   `;
+
+  // ---------- Fast-trainer test recording ----------
+  const resultsEl = view.querySelector('#ft-results');
+  function drawTestResults() {
+    const cur = getPlayer(id);
+    const entries = cur.trainerTests || [];
+    const t = classifyTrainerTest(cur);
+    resultsEl.innerHTML = `
+      <p><span class="chip blue">${entries.length}/${RECOMMENDED_TESTS} tests recorded</span>
+      ${t.tested ? `
+        <span class="chip ${t.class.chip}">${esc(t.class.label)}${t.provisional ? ' (provisional)' : ''}</span>
+        <span class="chip">avg ${t.avgGain.toFixed(1)}%/test · ${t.normalized.toFixed(1)}%/15% cond age-adjusted</span>
+      ` : entries.length ? `<span class="chip yellow">${MIN_TESTS_FOR_VERDICT - entries.length} more test${MIN_TESTS_FOR_VERDICT - entries.length === 1 ? '' : 's'} for a verdict</span>` : ''}</p>
+      ${t.tested ? `<p>${esc(t.class.note)}</p>` : ''}
+      ${t.tested && t.noisy ? '<div class="warn-note">Results vary a lot between tests — double-check you used the same 6-sprint session and near-full condition each time.</div>' : ''}
+      ${entries.length ? `<p>${entries.map((e, i) =>
+        `<span class="chip">#${i + 1}: ${esc(e.gain)}% <button class="btn danger small" data-ft-del="${i}" style="padding:2px 7px">✕</button></span>`).join(' ')}</p>` : ''}
+    `;
+    for (const btn of resultsEl.querySelectorAll('[data-ft-del]')) {
+      btn.addEventListener('click', () => {
+        const cur = getPlayer(id);
+        cur.trainerTests.splice(parseInt(btn.dataset.ftDel, 10), 1);
+        upsertPlayer(cur);
+        renderPlayer(view, id); // verdict card depends on the tests — full refresh
+      });
+    }
+  }
+  view.querySelector('#ft-add').addEventListener('click', () => {
+    const input = view.querySelector('#ft-gain');
+    const gain = parseFloat(input.value);
+    if (!Number.isFinite(gain) || gain < 0 || gain > 50) { input.focus(); return; }
+    const cur = getPlayer(id);
+    cur.trainerTests = cur.trainerTests || [];
+    cur.trainerTests.push({ gain, date: Date.now() });
+    upsertPlayer(cur);
+    renderPlayer(view, id);
+  });
+  drawTestResults();
 }

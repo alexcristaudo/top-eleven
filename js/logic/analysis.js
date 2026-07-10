@@ -3,8 +3,44 @@ import { ATTRIBUTES, ATTR_KEYS, attrLabel } from '../data/attributes.js';
 import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
 import { getFormation } from '../data/formations.js';
+import { ageSlabFactor, TEST_CONDITION_COST, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
 
 // ---------- Fast-trainer / development ----------
+
+// Classify a player from recorded fast-trainer test entries (gains in % of
+// role/SA progress from one 6-sprint session each). Gains are normalized to
+// "% per 15% condition" and corrected for the age slab so the classification
+// always compares against the 18–21 baseline.
+export function classifyTrainerTest(player) {
+  const entries = (player.trainerTests || []).filter((e) => Number.isFinite(e.gain) && e.gain >= 0);
+  if (entries.length < MIN_TESTS_FOR_VERDICT) {
+    return { tested: false, testsDone: entries.length, testsNeeded: MIN_TESTS_FOR_VERDICT, recommended: RECOMMENDED_TESTS };
+  }
+  const avgGain = entries.reduce((s, e) => s + e.gain, 0) / entries.length;
+  const gainPer15 = avgGain / (TEST_CONDITION_COST / 15);
+  const normalized = gainPer15 / ageSlabFactor(player.age || 21);
+  const cls = TRAINER_CLASSES.find((c) => normalized >= c.min) || TRAINER_CLASSES[TRAINER_CLASSES.length - 1];
+  const spread = Math.max(...entries.map((e) => e.gain)) - Math.min(...entries.map((e) => e.gain));
+  return {
+    tested: true,
+    testsDone: entries.length,
+    recommended: RECOMMENDED_TESTS,
+    provisional: entries.length < RECOMMENDED_TESTS,
+    avgGain,
+    gainPer15,
+    normalized,
+    class: cls,
+    noisy: entries.length >= 2 && spread > Math.max(2, avgGain), // wildly inconsistent inputs
+  };
+}
+
+// True when the player should be treated as a fast trainer: a measured test
+// verdict wins; the age heuristic is only the fallback for untested players.
+export function isFastTrainer(player) {
+  const t = classifyTrainerTest(player);
+  if (t.tested) return t.class.id === 'elite' || t.class.id === 'fast';
+  return (player.age || 99) <= 21;
+}
 
 export function fastTrainerRating(age) {
   if (age <= 19) return { tier: 5, label: 'Elite fast trainer', note: 'Peak gain years — every training session counts double here. Train hard and often.' };
@@ -134,7 +170,12 @@ export function needsForPosition(position) {
 // ---------- Development plan ----------
 
 export function developmentPlan(player, squadAvgQuality) {
-  const ft = fastTrainerRating(player.age);
+  // A measured fast-trainer test beats the age heuristic.
+  const test = classifyTrainerTest(player);
+  const TIER_BY_CLASS = { elite: 5, fast: 4, average: 2, slow: 1, 'very-slow': 0 };
+  const ft = test.tested
+    ? { tier: TIER_BY_CLASS[test.class.id], label: `Tested: ${test.class.label}`, note: test.class.note, tested: true }
+    : { ...fastTrainerRating(player.age), tested: false };
   const verdict = trainerVerdict(player, squadAvgQuality);
   const report = weaknessReport(player, player.position);
   const focus = report.items.slice(0, 3);
@@ -151,7 +192,7 @@ export function developmentPlan(player, squadAvgQuality) {
     ft.tier >= 2 ? 'Spend greens on match recovery first; extra training sessions only in light weeks.' :
     'Do not spend greens on training this player.';
 
-  return { fastTrainer: ft, verdict, weaknesses: focus, session, intensity, greens, report };
+  return { fastTrainer: ft, trainerTest: test, verdict, weaknesses: focus, session, intensity, greens, report };
 }
 
 // ---------- Tactics ----------

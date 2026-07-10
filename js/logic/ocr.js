@@ -122,6 +122,54 @@ export function parsePlayerText(text) {
 
 // ---------- Recording support: merge frame parses into distinct players ----------
 
+// OCR name variants: junk tokens glued on ("Ili Raoul Konyuy", "Eder Cuesta
+// Nr") and character-level misreads. Two names match when one's tokens are a
+// subset of the other's (sharing a substantial token), or they're within a
+// small edit distance.
+function normName(n) {
+  return String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+function editDistance(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+export function sameName(a, b) {
+  const na = normName(a);
+  const nb = normName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const ta = na.split(/\s+/);
+  const tb = nb.split(/\s+/);
+  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const subset = short.every((t) => long.includes(t));
+  if (subset && short.some((t) => t.length >= 4)) return true;
+  return editDistance(na, nb) <= 2;
+}
+
+// The cleaner of two matching name variants: fewer tokens wins (extra tokens
+// are OCR junk), then the longer string (more complete characters).
+function betterName(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const ta = a.split(/\s+/).length;
+  const tb = b.split(/\s+/).length;
+  if (ta !== tb) return ta < tb ? a : b;
+  return a.length >= b.length ? a : b;
+}
+
 // Two parses describe the same player when their shared attributes agree.
 function sameAttrs(a, b) {
   const keys = Object.keys(a).filter((k) => b[k] !== undefined);
@@ -131,8 +179,8 @@ function sameAttrs(a, b) {
 }
 
 function mergeInto(target, p) {
-  target.sightings++;
-  if (!target.name && p.name) target.name = p.name;
+  target.sightings += p.sightings || 1;
+  target.name = betterName(target.name, p.name);
   if (!target.age && p.age) target.age = p.age;
   if (!target.quality && p.quality) target.quality = p.quality;
   if (!target.position && p.position) target.position = p.position;
@@ -159,7 +207,7 @@ export function mergeSightings(parses, minFound = 6) {
     }
     let target = null;
     if (p.name) {
-      target = merged.find((m) => m.name && m.name.toLowerCase() === p.name.toLowerCase());
+      target = merged.find((m) => m.name && sameName(m.name, p.name));
     }
     if (!target) target = merged.find((m) => sameAttrs(m.attrs, p.attrs));
     if (target) mergeInto(target, p);
@@ -177,7 +225,19 @@ export function mergeSightings(parses, minFound = 6) {
       merged.push(entry);
     }
   }
-  return merged;
+  // Final dedupe: frames of one player can end up in separate entries when a
+  // partial read matched neither by name (not read yet) nor by fingerprint
+  // (too few shared attributes), and got its name donated later. Fold any
+  // remaining same-name or same-fingerprint entries together, richest first.
+  merged.sort((a, b) => b.found - a.found || b.sightings - a.sightings);
+  const deduped = [];
+  for (const m of merged) {
+    const dup = deduped.find((d) =>
+      (d.name && m.name && sameName(d.name, m.name)) || sameAttrs(d.attrs, m.attrs));
+    if (dup) mergeInto(dup, m);
+    else deduped.push(m);
+  }
+  return deduped;
 }
 
 // Decide, per detected player, whether it's a new addition or an update to an
@@ -185,7 +245,7 @@ export function mergeSightings(parses, minFound = 6) {
 export function planSquadChanges(existingPlayers, merged) {
   return merged.map((m) => {
     const match = m.name
-      ? existingPlayers.find((p) => p.name.trim().toLowerCase() === m.name.trim().toLowerCase())
+      ? existingPlayers.find((p) => sameName(p.name, m.name))
       : null;
     if (!match) return { type: 'add', sighting: m };
     const changes = {};
@@ -473,5 +533,8 @@ export async function processRecording(file, onProgress) {
   } finally {
     await session.terminate();
   }
-  return { merged: mergeSightings(parses), frames: parses.length };
+  // Frames that showed a profile but couldn't be read fully — worth telling
+  // the user so they re-record those players with a steadier hold.
+  const partials = parses.filter((p) => p && p.found >= 1 && p.found < 6).length;
+  return { merged: mergeSightings(parses), frames: parses.length, partials };
 }

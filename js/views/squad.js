@@ -221,14 +221,17 @@ export function renderSquad(view) {
     videoReview.innerHTML = '';
     scanStatus.innerHTML = `<div class="note">🎬 Preparing recording… <span class="hint">Best results: open each player's profile → <strong>Skills</strong> tab and hold for 1–2 seconds. Sideways recordings are handled automatically. Everything runs on this device.</span></div>`;
     try {
-      const { merged, frames } = await processRecording(file, (msg, progress) => {
+      const { merged, frames, partials } = await processRecording(file, (msg, progress) => {
         scanStatus.innerHTML = `<div class="note">🎬 ${esc(msg)}${progress != null ? ` (${Math.round(progress * 100)}%)` : ''}</div>`;
       });
       if (!merged.length) {
         scanStatus.innerHTML = `<div class="warn-note">Read ${frames} frames but couldn't identify any player profiles. Make sure the recording shows the profile screen with all 15 skills, held steady for a second or two per player.</div>`;
         return;
       }
-      scanStatus.innerHTML = `<div class="note">✅ Found <strong>${merged.length}</strong> player${merged.length === 1 ? '' : 's'} across ${frames} frames. Review below, then apply.</div>`;
+      const partialNote = partials
+        ? ` ⚠️ ${partials} screen${partials === 1 ? '' : 's'} couldn't be read fully and ${partials === 1 ? 'was' : 'were'} skipped — if a player is missing below, re-record them holding the Skills tab steady for 2 seconds.`
+        : '';
+      scanStatus.innerHTML = `<div class="note">✅ Found <strong>${merged.length}</strong> player${merged.length === 1 ? '' : 's'} across ${frames} frames.${partialNote} Review below, then apply.</div>`;
       drawVideoReview(merged);
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Recording import failed: ${esc(e.message)}</div>`;

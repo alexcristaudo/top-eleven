@@ -1,6 +1,6 @@
 // Home dashboard: squad snapshot + quick links + rotating tip.
 import { getPlayers } from '../store.js';
-import { fastTrainerRating } from '../logic/analysis.js';
+import { fastTrainerRating, isFastTrainer, classifyTrainerTest } from '../logic/analysis.js';
 import { GUIDES } from '../data/guides.js';
 import { esc, posBadge } from './ui.js';
 import { APP_VERSION } from '../version.js';
@@ -22,7 +22,7 @@ export function renderDashboard(view) {
   const players = getPlayers();
   const avgQ = players.length ? players.reduce((s, p) => s + (p.quality || 0), 0) / players.length : 0;
   const avgAge = players.length ? players.reduce((s, p) => s + (p.age || 0), 0) / players.length : 0;
-  const fastTrainers = players.filter((p) => fastTrainerRating(p.age).tier >= 4).length;
+  const fastTrainers = players.filter(isFastTrainer).length;
   const tip = TIPS[new Date().getDate() % TIPS.length];
 
   view.innerHTML = `
@@ -33,7 +33,7 @@ export function renderDashboard(view) {
       <div class="tile"><div class="num">${players.length}</div><div class="lbl">Players saved</div></div>
       <div class="tile"><div class="num">${players.length ? Math.round(avgQ) + '%' : '—'}</div><div class="lbl">Avg quality</div></div>
       <div class="tile"><div class="num">${players.length ? avgAge.toFixed(1) : '—'}</div><div class="lbl">Avg age</div></div>
-      <div class="tile"><div class="num">${players.length ? fastTrainers : '—'}</div><div class="lbl">Fast trainers (≤21)</div></div>
+      <div class="tile"><div class="num">${players.length ? fastTrainers : '—'}</div><div class="lbl">Fast trainers</div></div>
     </div>
 
     <div class="note">💡 <strong>Tip of the day:</strong> ${esc(tip)}</div>
@@ -50,17 +50,21 @@ export function renderDashboard(view) {
       <div style="height:14px"></div>
       <div class="card">
         <h3>Development priorities</h3>
-        <p class="hint">Your fast trainers — the players where training time converts to skill fastest.</p>
-        ${players.filter((p) => fastTrainerRating(p.age).tier >= 4)
+        <p class="hint">Your fast trainers — measured by the fast-trainer test where available, estimated from age otherwise. Run the test on each player's page for the real answer.</p>
+        ${players.filter(isFastTrainer)
           .sort((a, b) => a.age - b.age)
           .slice(0, 5)
-          .map((p) => `
+          .map((p) => {
+            const t = classifyTrainerTest(p);
+            const label = t.tested ? `Tested: ${t.class.label}` : `${fastTrainerRating(p.age).label} (estimated)`;
+            return `
             <div class="player-row" data-id="${esc(p.id)}">
               ${posBadge(p.position)}
               <div class="grow"><div class="name">${esc(p.name)}</div>
-              <div class="meta">Age ${esc(p.age)} · ${esc(fastTrainerRating(p.age).label)}</div></div>
+              <div class="meta">Age ${esc(p.age)} · ${esc(label)}</div></div>
               <div class="quality">${esc(p.quality)}%</div>
-            </div>`).join('') || '<p class="hint">No players aged 21 or under — consider buying young projects early next season.</p>'}
+            </div>`;
+          }).join('') || '<p class="hint">No confirmed or likely fast trainers — test your 18–22 year olds (player page → Fast-trainer test).</p>'}
       </div>` : `
       <div style="height:14px"></div>
       <div class="empty">Add your squad to unlock personalised development plans,<br>weakness analysis and formation fit checks.</div>`}
