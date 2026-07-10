@@ -1,7 +1,7 @@
 // TE Manager service worker — cache-first with versioned precache.
 // vendor/tesseract assets are intentionally NOT precached: they are large and
 // lazy-loaded on first screenshot import, then kept by the runtime cache below.
-const VERSION = 'te-manager-v9'; // keep in step with js/version.js
+const VERSION = 'te-manager-v10'; // keep in step with js/version.js
 const ASSETS = [
   './',
   './index.html',
