@@ -1,10 +1,11 @@
 // parsePlayerText: turning noisy OCR output into a player draft.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlayerText } from '../js/logic/ocr.js';
+import { parsePlayerText, mergeSightings, planSquadChanges } from '../js/logic/ocr.js';
 
 const CLEAN_PROFILE = `
 Marco Rossi
+ST
 Age 19    Quality 84%
 DEFENCE
 Tackling 41
@@ -35,6 +36,7 @@ test('parses a clean player profile completely', () => {
   assert.equal(r.age, 19);
   assert.equal(r.quality, 84);
   assert.equal(r.name, 'Marco Rossi');
+  assert.equal(r.position, 'ST');
 });
 
 test('tolerates OCR-mangled labels and mixed separators', () => {
@@ -74,4 +76,51 @@ test('ignores implausible ages and out-of-range values', () => {
   const r = parsePlayerText('Age 99\nTackling 999');
   assert.equal(r.age, null);
   assert.equal(r.attrs.tackling, undefined);
+});
+
+// ---------- Recording: sighting merge + squad diff ----------
+
+const P1 = parsePlayerText(CLEAN_PROFILE);
+const P1_PARTIAL = parsePlayerText(CLEAN_PROFILE.replace('Finishing 88\n', '').replace('Marco Rossi\n', ''));
+const P2 = parsePlayerText(CLEAN_PROFILE
+  .replace('Marco Rossi', 'John Smith')
+  .replace(/Tackling 41/, 'Tackling 90')
+  .replace(/Shooting 91/, 'Shooting 40')
+  .replace(/Speed 90/, 'Speed 55')
+  .replace(/Dribbling 85/, 'Dribbling 30')
+  .replace(/Finishing 88/, 'Finishing 21'));
+
+test('mergeSightings: groups repeat frames of the same player, keeps distinct players apart', () => {
+  const merged = mergeSightings([P1, P1_PARTIAL, P2, { attrs: {}, found: 0 }]);
+  assert.equal(merged.length, 2);
+  const rossi = merged.find((m) => m.name === 'Marco Rossi');
+  assert.equal(rossi.sightings, 2);
+  assert.equal(rossi.found, 15); // partial frame filled by the full one
+  assert.equal(merged.find((m) => m.name === 'John Smith').sightings, 1);
+});
+
+test('mergeSightings: drops frames below the minimum data threshold', () => {
+  const merged = mergeSightings([{ attrs: { speed: 90 }, found: 1, name: null }]);
+  assert.equal(merged.length, 0);
+});
+
+test('planSquadChanges: classifies add / update / unchanged with field diffs', () => {
+  const existing = [{
+    id: 'x', name: 'marco rossi', position: 'ST', age: 19, quality: 80,
+    attrs: { ...P1.attrs, shooting: 85 },
+  }];
+  const plan = planSquadChanges(existing, mergeSightings([P1, P2]));
+  const rossi = plan.find((p) => p.sighting.name === 'Marco Rossi');
+  assert.equal(rossi.type, 'update');
+  assert.equal(rossi.changes.quality, 84);
+  assert.equal(rossi.changes.attrs.shooting, 91);
+  assert.equal(rossi.changes.age, undefined);
+  const smith = plan.find((p) => p.sighting.name === 'John Smith');
+  assert.equal(smith.type, 'add');
+  // Identical sighting → unchanged.
+  const same = planSquadChanges(
+    [{ id: 'y', name: 'Marco Rossi', age: 19, quality: 84, attrs: P1.attrs }],
+    mergeSightings([P1]),
+  );
+  assert.equal(same[0].type, 'unchanged');
 });
