@@ -78,6 +78,61 @@ test('ignores implausible ages and out-of-range values', () => {
   assert.equal(r.attrs.tackling, undefined);
 });
 
+// Raw OCR text captured from a real iPhone recording of the game's Skills tab
+// (three-column layout, "OVR" misread as "or", accented name with junk edges).
+const REAL_SKILLS_TAB = `EY
+[/] i AC 5
+A «8 cipriano Cuscuna x
+( or 67 Sokokok 1 a
+1 |B Age: 32 ® Roles:
+| # | Team: Alexander FC Special ability: [YO + |
+| [CJ DEFENCE 74 [BJ ATTACK 61 [CJ PHYSICAL 66
+Skills Tackling 69 Passing 55 Fitness 83
+= Marking 80  Dribbling 70 Strength 48
+- Positioning 82 Crossing 70 Aggression 67
+Heading 62 Shooting 63 Speed 82
+Bravery 75 Finishing 49 Creativity 52
+Key attributes for this player are highlighted. Train or tier up the player
+to improve them further. )`;
+
+test('parses the real in-game Skills tab layout (three columns, OVR, accents)', () => {
+  const r = parsePlayerText(REAL_SKILLS_TAB);
+  assert.equal(r.found, 15);
+  assert.equal(r.attrs.tackling, 69); // must NOT match the "ATTACK 61" header
+  assert.equal(r.attrs.speed, 82);
+  assert.equal(r.attrs.fitness, 83);
+  assert.equal(r.attrs.creativity, 52);
+  assert.equal(r.quality, 67); // from "or 67" (mangled OVR), not group averages
+  assert.equal(r.age, 32);
+  assert.equal(r.name, 'Cipriano Cuscuna');
+});
+
+test('real Overview tab: header info without skills, condition % ignored', () => {
+  const r = parsePlayerText(`e —
+“+ cipriano Cuscuna x
+( ovr 67 oko 1 a
+1 | Age: 32 ® Roles:
+Weight: 78 kg Height: 182 cm Foot
+INJURIES MORALE CONDITION
+Very good 79%
+Your player is fully fit.`);
+  assert.equal(r.found, 0);
+  assert.equal(r.name, 'Cipriano Cuscuna');
+  assert.equal(r.quality, 67); // OVR, not the 79% condition meter
+  assert.equal(r.age, 32);
+});
+
+test('mergeSightings: an Overview header frame donates its name to the following skills frame', () => {
+  const header = parsePlayerText('cipriano Cuscuna x\novr 67\nAge: 32');
+  const skills = parsePlayerText(REAL_SKILLS_TAB.replace('A «8 cipriano Cuscuna x\n', ''));
+  assert.equal(header.found, 0);
+  assert.equal(skills.name, null);
+  const merged = mergeSightings([header, skills]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].name, 'Cipriano Cuscuna');
+  assert.equal(merged[0].found, 15);
+});
+
 // ---------- Recording: sighting merge + squad diff ----------
 
 const P1 = parsePlayerText(CLEAN_PROFILE);

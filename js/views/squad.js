@@ -219,7 +219,7 @@ export function renderSquad(view) {
     videoFile.value = '';
     if (!file) return;
     videoReview.innerHTML = '';
-    scanStatus.innerHTML = `<div class="note">🎬 Preparing recording… <span class="hint">Scroll slowly through each player's profile when you record — 1–2 seconds per player. Everything runs on this device.</span></div>`;
+    scanStatus.innerHTML = `<div class="note">🎬 Preparing recording… <span class="hint">Best results: open each player's profile → <strong>Skills</strong> tab and hold for 1–2 seconds. Sideways recordings are handled automatically. Everything runs on this device.</span></div>`;
     try {
       const { merged, frames } = await processRecording(file, (msg, progress) => {
         scanStatus.innerHTML = `<div class="note">🎬 ${esc(msg)}${progress != null ? ` (${Math.round(progress * 100)}%)` : ''}</div>`;
