@@ -344,35 +344,63 @@ export async function recognizeScreenshot(file, onProgress) {
 // ---------- Screen-recording import ----------
 
 // Seek through a video file and hand each sampled frame to `onFrame`.
+// Hardened for iOS Safari: 'seeked' does not fire when seeking to the current
+// position, and some decoders need a muted play/pause warm-up — so every wait
+// has an event OR timeout fallback rather than trusting a single event.
 async function eachVideoFrame(file, { stepSeconds = 0.7, maxFrames = 150 } = {}, onFrame) {
   const url = URL.createObjectURL(file);
   const video = document.createElement('video');
   video.muted = true;
   video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('muted', '');
   video.preload = 'auto';
+
+  const seekTo = (t, timeoutMs = 3000) => new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = () => { if (!settled) { settled = true; cleanup(); resolve(); } };
+    // Stale events queued before the seek started (e.g. from the play/pause
+    // warm-up) must not resolve early — while a real seek is in flight,
+    // video.seeking is true.
+    const finish = () => { if (!video.seeking) settle(); };
+    const fail = () => { if (!settled) { settled = true; cleanup(); reject(new Error('Video decode failed mid-file.')); } };
+    const timer = setTimeout(settle, timeoutMs); // Safari sometimes skips the event
+    const cleanup = () => {
+      clearTimeout(timer);
+      video.removeEventListener('seeked', finish);
+      video.removeEventListener('timeupdate', finish);
+      video.removeEventListener('error', fail);
+    };
+    video.addEventListener('seeked', finish);
+    video.addEventListener('timeupdate', finish);
+    video.addEventListener('error', fail);
+    if (Math.abs(video.currentTime - t) < 0.01 && video.readyState >= 2) { finish(); return; }
+    try { video.currentTime = t; } catch { fail(); }
+  });
+
   try {
     video.src = url;
     await new Promise((res, rej) => {
-      video.onloadedmetadata = res;
-      video.onerror = () => rej(new Error('Could not read that video format.'));
+      const timer = setTimeout(() => rej(new Error('Timed out opening the video — is it a normal screen recording?')), 15000);
+      video.onloadedmetadata = () => { clearTimeout(timer); res(); };
+      video.onerror = () => { clearTimeout(timer); rej(new Error('Could not read that video format.')); };
     });
+    // Warm up the decode pipeline (needed on some iOS versions before a
+    // paused video can be drawn to canvas). Muted play is gesture-exempt.
+    try { await video.play(); video.pause(); } catch { /* non-fatal */ }
+
     let duration = video.duration;
     if (!Number.isFinite(duration)) {
       // Some recordings (e.g. MediaRecorder WebM) report Infinity until a
       // far seek forces the real duration to be computed.
-      video.currentTime = 1e7;
-      await new Promise((r) => { video.onseeked = r; });
+      await seekTo(1e7, 5000);
       duration = video.duration;
     }
     if (!Number.isFinite(duration) || duration <= 0) throw new Error('Could not read the video duration.');
     const total = Math.min(maxFrames, Math.max(1, Math.ceil(duration / stepSeconds)));
     for (let i = 0; i < total; i++) {
       const t = Math.min(Math.max(0, duration - 0.05), i * stepSeconds);
-      await new Promise((res, rej) => {
-        video.onseeked = res;
-        video.onerror = () => rej(new Error('Video decode failed mid-file.'));
-        video.currentTime = t;
-      });
+      await seekTo(t);
       await onFrame(video, i, total);
     }
   } finally {
@@ -428,6 +456,7 @@ export async function processRecording(file, onProgress) {
   let prevThumb = null;
   let prevParse = null;
   try {
+    onProgress?.('Opening video…', null);
     await eachVideoFrame(file, {}, async (video, i, total) => {
       const msg = `Reading frame ${i + 1} of ${total}…`;
       session.setLabel(msg);

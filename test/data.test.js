@@ -97,6 +97,15 @@ test('checklist: unique task ids across phases; token categories valid', () => {
   assert.ok(TOKEN_CATEGORIES.some((c) => c.kind === 'spend') && TOKEN_CATEGORIES.some((c) => c.kind === 'earn'));
 });
 
+test('app version and service worker cache version stay in step', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const { APP_VERSION } = await import('../js/version.js');
+  const sw = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+  const m = sw.match(/const VERSION = 'te-manager-(v\d+)'/);
+  assert.ok(m, 'sw.js VERSION not found');
+  assert.equal(m[1], APP_VERSION, 'bump js/version.js and sw.js together');
+});
+
 test('guides: unique ids and substantial content', () => {
   const ids = new Set();
   for (const g of GUIDES) {
