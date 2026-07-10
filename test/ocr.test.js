@@ -107,6 +107,13 @@ test('parses the real in-game Skills tab layout (three columns, OVR, accents)', 
   assert.equal(r.name, 'Cipriano Cuscuna');
 });
 
+test('parses the special ability from the profile header', () => {
+  const r = parsePlayerText('Marco Rossi\nAge: 19\nSpecial ability: Free kick specialist\nTackling 40');
+  assert.equal(r.specialAbility, 'free kick specialist');
+  const none = parsePlayerText('Marco Rossi\nSpecial ability: None');
+  assert.equal(none.specialAbility, null);
+});
+
 test('real Overview tab: header info without skills, condition % ignored', () => {
   const r = parsePlayerText(`e —
 “+ cipriano Cuscuna x

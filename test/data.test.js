@@ -8,6 +8,9 @@ import { DRILLS, DRILL_CATEGORIES, INTENSITY } from '../js/data/drills.js';
 import { FORMATIONS, getFormation, ORIENTATION_REFERENCE } from '../js/data/formations.js';
 import { GUIDES } from '../js/data/guides.js';
 import { SEASON_CHECKLIST, ALL_TASK_IDS, TOKEN_CATEGORIES } from '../js/data/checklist.js';
+import { TEAMPLAY_BONUSES, BONUS_MAX, BONUS_DECAY } from '../js/data/teamplay.js';
+import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../js/data/playstyles.js';
+import { SPECIAL_ABILITIES, RECOMMENDED_SA_KIT, matchAbility } from '../js/data/abilities.js';
 
 test('attributes: 15 skills across 3 groups, unique keys', () => {
   assert.equal(ATTRIBUTES.length, 15);
@@ -81,6 +84,44 @@ test('formations: 11 players, valid positions, resolvable counters', () => {
     }
   }
   assert.ok(ORIENTATION_REFERENCE.length >= 8);
+});
+
+test('teamplay: four bonuses referencing real drill categories, sane constants', () => {
+  assert.equal(TEAMPLAY_BONUSES.length, 4);
+  const catIds = new Set(DRILL_CATEGORIES.map((c) => c.id));
+  for (const b of TEAMPLAY_BONUSES) {
+    assert.ok(catIds.has(b.drillCategory), `${b.id}: unknown drill category ${b.drillCategory}`);
+    assert.ok(typeof b.filter === 'function' && b.minCount >= 4);
+    // Each bonus's drill category has at least 2 drills to train with.
+    assert.ok(DRILLS.filter((d) => d.category === b.drillCategory).length >= 2, `${b.id}: too few drills`);
+  }
+  assert.ok(BONUS_MAX === 10 && BONUS_DECAY === 2);
+});
+
+test('playstyles: valid positions and drill references, unique ids', () => {
+  const drillIds = new Set(DRILLS.map((d) => d.id));
+  const ids = new Set();
+  for (const s of PLAYSTYLES) {
+    assert.ok(!ids.has(s.id), `duplicate playstyle ${s.id}`);
+    ids.add(s.id);
+    assert.ok(['Attacker', 'Midfielder', 'Defender'].includes(s.category));
+    for (const pos of s.positions) assert.ok(POSITIONS.includes(pos), `${s.id}: bad position ${pos}`);
+    assert.ok(s.drills.length >= 2);
+    for (const d of s.drills) assert.ok(drillIds.has(d), `${s.id}: unknown drill ${d}`);
+  }
+  assert.deepEqual(PLAYSTYLE_LEVELS, ['None', 'Basic', 'Advanced', 'Master']);
+});
+
+test('abilities: kit references real abilities; OCR text maps to ids', () => {
+  const saIds = new Set(SPECIAL_ABILITIES.map((a) => a.id));
+  assert.equal(saIds.size, SPECIAL_ABILITIES.length);
+  for (const k of RECOMMENDED_SA_KIT) assert.ok(saIds.has(k.id), `kit references unknown SA ${k.id}`);
+  assert.equal(matchAbility('Free kick specialist'), 'free-kick');
+  assert.equal(matchAbility('aerial defender'), 'aerial-defender');
+  assert.equal(matchAbility('One on one stopper'), 'one-on-one-stopper');
+  assert.equal(matchAbility('Playmaker'), 'playmaker');
+  assert.equal(matchAbility('None'), null);
+  assert.equal(matchAbility(''), null);
 });
 
 test('checklist: unique task ids across phases; token categories valid', () => {

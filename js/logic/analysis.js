@@ -4,6 +4,7 @@ import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
 import { getFormation, FORMATIONS } from '../data/formations.js';
 import { ageSlabFactor, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
+import { RECOMMENDED_SA_KIT, SPECIAL_ABILITIES } from '../data/abilities.js';
 
 // ---------- Fast-trainer / development ----------
 
@@ -199,6 +200,24 @@ export function developmentPlan(player, squadAvgQuality) {
     'Do not spend greens on training this player.';
 
   return { fastTrainer: ft, trainerTest: test, verdict, weaknesses: focus, session, intensity, greens, report };
+}
+
+// ---------- Special-ability coverage ----------
+
+// Check the squad against the recommended special-ability kit.
+export function saCoverage(players) {
+  return RECOMMENDED_SA_KIT.map((slot) => {
+    const ability = SPECIAL_ABILITIES.find((a) => a.id === slot.id);
+    const holders = players.filter((p) => p.specialAbility === slot.id);
+    return {
+      id: slot.id,
+      label: ability ? ability.label : slot.id,
+      want: slot.want,
+      why: slot.why,
+      holders,
+      covered: holders.length >= slot.want,
+    };
+  });
 }
 
 // ---------- Tactics ----------

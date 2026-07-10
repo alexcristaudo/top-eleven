@@ -4,6 +4,7 @@ import { POSITIONS, ROLES } from '../data/roles.js';
 import { attrLabel } from '../data/attributes.js';
 import { recommendDrills, needsForPosition, needsFromWeaknesses, weaknessReport, conditionPlan } from '../logic/analysis.js';
 import { getPlayers } from '../store.js';
+import { TEAMPLAY_BONUSES, BONUS_MAX, BONUS_DECAY, BONUS_PER_SESSION, TEAMPLAY_NOTES } from '../data/teamplay.js';
 import { esc } from './ui.js';
 
 export function renderTraining(view) {
@@ -30,6 +31,35 @@ export function renderTraining(view) {
         </label>
       </div>
       <div id="session-out"></div>
+    </div>
+
+    <div class="card">
+      <h3>Teamplay bonus planner</h3>
+      <p class="hint">The four match bonuses cap at ${BONUS_MAX}% each (40% total) and drop ${BONUS_DECAY}% per category every game-day. Enter today's values to get the maintenance plan.</p>
+      <div class="field-row" style="grid-template-columns:1fr 1fr">
+        ${TEAMPLAY_BONUSES.slice(0, 2).map((b) => `
+          <label class="field"><span>${esc(b.label)}: <b id="tb-val-${b.id}">6</b>%</span>
+            <input type="range" id="tb-${b.id}" min="0" max="${BONUS_MAX}" step="1" value="6">
+          </label>`).join('')}
+      </div>
+      <div class="field-row" style="grid-template-columns:1fr 1fr">
+        ${TEAMPLAY_BONUSES.slice(2).map((b) => `
+          <label class="field"><span>${esc(b.label)}: <b id="tb-val-${b.id}">6</b>%</span>
+            <input type="range" id="tb-${b.id}" min="0" max="${BONUS_MAX}" step="1" value="6">
+          </label>`).join('')}
+      </div>
+      <div id="tb-out"></div>
+      <ul>${TEAMPLAY_NOTES.map((n) => `<li class="hint">${esc(n)}</li>`).join('')}</ul>
+    </div>
+
+    <div class="card">
+      <h3>Personal trainer — worth it?</h3>
+      <p class="hint">The personal trainer converts tokens straight into skill points (young players get more per token). Check any offer before paying.</p>
+      <div class="field-row">
+        <label class="field"><span>Tokens asked</span><input type="number" id="pt-tokens" min="1" step="1" placeholder="e.g. 12"></label>
+        <label class="field"><span>Skill points offered</span><input type="number" id="pt-points" min="1" step="1" placeholder="e.g. 10"></label>
+      </div>
+      <div id="pt-out"></div>
     </div>
 
     <div class="card">
@@ -139,4 +169,55 @@ export function renderTraining(view) {
   }
   for (const el of [condIn, hoursIn, targetIn]) el.addEventListener('input', drawCondition);
   drawCondition();
+
+  // ---------- Teamplay bonus planner ----------
+  const tbOut = view.querySelector('#tb-out');
+  function drawTeamplay() {
+    const catLabel = Object.fromEntries(DRILL_CATEGORIES.map((c) => [c.id, c.label]));
+    const rows = TEAMPLAY_BONUSES.map((b) => {
+      const val = parseInt(view.querySelector(`#tb-${b.id}`).value, 10);
+      view.querySelector(`#tb-val-${b.id}`).textContent = val;
+      const afterDecay = Math.max(0, val - BONUS_DECAY);
+      const sessions = Math.ceil((BONUS_MAX - afterDecay) / BONUS_PER_SESSION);
+      const squadOk = players.filter(b.filter).length >= b.minCount;
+      return { b, val, afterDecay, sessions, squadOk };
+    });
+    const work = rows.filter((r) => r.sessions > 0);
+    tbOut.innerHTML = `
+      <div class="table-wrap"><table class="tbl">
+        <tr><th>Bonus</th><th>Tomorrow</th><th>To max</th><th>How</th></tr>
+        ${rows.map((r) => `
+          <tr>
+            <td><strong>${esc(r.b.label)}</strong></td>
+            <td>${r.afterDecay}%</td>
+            <td>${r.sessions === 0 ? '<span class="chip green">full</span>' : `${r.sessions} session${r.sessions === 1 ? '' : 's'} (${Math.ceil(r.sessions / 2)} with 2× boost)`}</td>
+            <td class="hint">${esc(catLabel[r.b.drillCategory] || r.b.drillCategory)} · ${esc(r.b.minPlayers)}${players.length && !r.squadOk ? ' <span class="chip red">squad lacks these players!</span>' : ''}</td>
+          </tr>`).join('')}
+      </table></div>
+      ${work.length === 0 ? '<div class="note">✅ All bonuses hold at max through tomorrow — one light maintenance session per category per day keeps it that way.</div>' : ''}`;
+  }
+  for (const b of TEAMPLAY_BONUSES) {
+    view.querySelector(`#tb-${b.id}`).addEventListener('input', drawTeamplay);
+  }
+  drawTeamplay();
+
+  // ---------- Personal trainer calculator ----------
+  const ptOut = view.querySelector('#pt-out');
+  function drawPT() {
+    const tokens = parseInt(view.querySelector('#pt-tokens').value, 10);
+    const points = parseInt(view.querySelector('#pt-points').value, 10);
+    if (!Number.isFinite(tokens) || !Number.isFinite(points) || tokens <= 0 || points <= 0) {
+      ptOut.innerHTML = '';
+      return;
+    }
+    const ratio = tokens / points;
+    const verdict = ratio <= 1
+      ? { cls: 'note', text: `✅ ${ratio.toFixed(1)} tokens per point — good value, IF this is a measured fast trainer aged 18–21 you plan to keep.` }
+      : ratio <= 2
+        ? { cls: 'note', text: `🟡 ${ratio.toFixed(1)} tokens per point — acceptable for a key young player in a title run; free 6-sprint sessions give a fast trainer ~2 points for ~33% condition.` }
+        : { cls: 'warn-note', text: `❌ ${ratio.toFixed(1)} tokens per point — poor value. Normal training (free) or the auction market beats this; never pay it for slow or ageing players.` };
+    ptOut.innerHTML = `<div class="${verdict.cls}">${verdict.text}</div>`;
+  }
+  view.querySelector('#pt-tokens').addEventListener('input', drawPT);
+  view.querySelector('#pt-points').addEventListener('input', drawPT);
 }

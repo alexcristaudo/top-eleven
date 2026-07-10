@@ -6,6 +6,7 @@
 export const DRILL_CATEGORIES = [
   { id: 'defence', label: 'Defence drills' },
   { id: 'attack', label: 'Attack drills' },
+  { id: 'possession', label: 'Possession drills' },
   { id: 'physical', label: 'Physical & Mental drills' },
 ];
 
@@ -120,6 +121,26 @@ export const DRILLS = [
     attrs: { heading: 2, finishing: 1 },
     positions: ['ST', 'AMC', 'DC'],
     note: 'Attacking crosses in the air. Pair with flank-focused tactics.',
+  },
+
+  // ---------- Possession ----------
+  {
+    id: 'keep-ball', name: 'Keep-Ball Game', category: 'possession', cost: 6,
+    attrs: { passing: 2, positioning: 1 },
+    positions: ['DMC', 'MC', 'ML', 'MR', 'AMC'],
+    note: 'Small-sided keep-away under pressure. The staple for restoring the Possession teamplay bonus.',
+  },
+  {
+    id: 'positional-rondo', name: 'Positional Rondo', category: 'possession', cost: 5,
+    attrs: { passing: 2, creativity: 1 },
+    positions: ['DMC', 'MC', 'AMC', 'DC'],
+    note: 'Rondo with fixed zones — passing lanes over legs. Cheap possession-bonus filler.',
+  },
+  {
+    id: 'transition-play', name: 'Transition Play', category: 'possession', cost: 7,
+    attrs: { passing: 1, positioning: 1, fitness: 1 },
+    positions: ['DMC', 'MC', 'ML', 'MR', 'AMC', 'DL', 'DR'],
+    note: 'Win it, keep it, switch the point of attack. Broad gains and possession-bonus credit.',
   },
 
   // ---------- Physical & Mental ----------
