@@ -154,7 +154,10 @@ test('rankFormations: full coverage beats higher quality with gaps', () => {
   const ranked = rankFormations(squad);
   assert.equal(ranked[0].formation.id, '4-4-2');
   assert.equal(ranked[0].missing, 0);
-  assert.ok(Math.abs(ranked[0].score - 80) < 0.01);
+  assert.ok(Math.abs(ranked[0].fit - 80) < 0.01);
+  // Blended score reflects the shape's meta rating on top of the fit.
+  assert.ok(ranked[0].score > ranked[0].fit * 0.85);
+  assert.ok(ranked.every((r) => r.meta >= 1 && r.meta <= 10));
   // The butterfly needs DMC/AMC this squad lacks — must rank below despite
   // sharing the same player pool.
   const butterfly = ranked.find((r) => r.formation.id === 'butterfly');
@@ -162,6 +165,33 @@ test('rankFormations: full coverage beats higher quality with gaps', () => {
   assert.ok(ranked.indexOf(butterfly) > 0);
   // Every formation is present exactly once.
   assert.equal(ranked.length, new Set(ranked.map((r) => r.formation.id)).size);
+});
+
+test('rankFormations: meta strength breaks ties between equally-covered shapes', () => {
+  // Versatile squad that fully staffs BOTH 4-2-3-1 (meta 9) and 4-4-1-1
+  // (meta 6.5) at identical quality — the stronger shape must rank higher.
+  const q = 80;
+  const squad = [
+    { id: 'gk', name: 'GK', position: 'GK', quality: q },
+    { id: 'dl', name: 'DL', position: 'DL', quality: q },
+    { id: 'dc1', name: 'D1', position: 'DC', quality: q },
+    { id: 'dc2', name: 'D2', position: 'DC', quality: q },
+    { id: 'dr', name: 'DR', position: 'DR', quality: q },
+    { id: 'mc1', name: 'M1', position: 'MC', quality: q },
+    { id: 'mc2', name: 'M2', position: 'MC', quality: q },
+    { id: 'aml', name: 'W1', position: 'AML', altPositions: ['ML'], quality: q },
+    { id: 'amr', name: 'W2', position: 'AMR', altPositions: ['MR'], quality: q },
+    { id: 'amc', name: 'AM', position: 'AMC', quality: q },
+    { id: 'st', name: 'ST', position: 'ST', quality: q },
+  ];
+  const ranked = rankFormations(squad);
+  const pos = (id) => ranked.findIndex((r) => r.formation.id === id);
+  const r4231 = ranked[pos('4-2-3-1')];
+  const r4411 = ranked[pos('4-4-1-1')];
+  assert.equal(r4231.missing, 0);
+  assert.equal(r4411.missing, 0);
+  assert.ok(pos('4-2-3-1') < pos('4-4-1-1'), 'higher meta must win at equal coverage');
+  assert.ok(r4231.fit >= r4411.fit); // exact-position fit is also better for 4-2-3-1
 });
 
 test('conditionPlan: regen math, green packs, readiness', () => {
