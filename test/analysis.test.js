@@ -6,7 +6,7 @@ import {
   fastTrainerRating, trainerVerdict, weaknessReport, roleFit,
   recommendDrills, needsFromWeaknesses, needsForPosition,
   developmentPlan, counterOptions, squadFitForFormation,
-  bestXI, conditionPlan, rankFormations,
+  bestXI, conditionPlan, rankFormations, bidValuation, positionNeed,
 } from '../js/logic/analysis.js';
 import { getFormation } from '../js/data/formations.js';
 
@@ -223,4 +223,38 @@ test('squadFitForFormation: matches exact and alt positions, sorted by quality',
   assert.deepEqual(st.players.map((p) => p.id), ['b', 'a']);
   const dl = fit.find((r) => r.pos === 'DL');
   assert.equal(dl.players.length, 0);
+});
+
+test('bidValuation: young players worth more; age dominates', () => {
+  const young = bidValuation({ age: 19, stars: 4 });
+  const old = bidValuation({ age: 28, stars: 4 });
+  assert.ok(young.maxBid > old.maxBid, `young ${young.maxBid} should beat old ${old.maxBid}`);
+  // A prime fast-trainer age should command a meaningful token bid.
+  assert.ok(young.maxBid >= 10);
+  // A 28-year-old is scraps regardless of stars.
+  assert.ok(old.maxBid <= 6);
+});
+
+test('bidValuation: extras and squad need adjust the ceiling', () => {
+  const plain = bidValuation({ age: 20, stars: 4 });
+  const loaded = bidValuation({ age: 20, stars: 4, endsIn49: true, hasSpecialAbility: true, hasPlaystyle: true });
+  assert.equal(loaded.bonus, 6);
+  assert.ok(loaded.maxBid > plain.maxBid);
+  const gap = bidValuation({ age: 20, stars: 4, need: 'gap' });
+  const surplus = bidValuation({ age: 20, stars: 4, need: 'surplus' });
+  assert.ok(gap.maxBid > plain.maxBid && surplus.maxBid < plain.maxBid);
+  // Higher star level raises the ceiling.
+  assert.ok(bidValuation({ age: 20, stars: 6 }).maxBid > bidValuation({ age: 20, stars: 3 }).maxBid);
+});
+
+test('positionNeed: reflects squad coverage', () => {
+  const squad = [
+    { position: 'ST' },
+    { position: 'MC' }, { position: 'MC' }, { position: 'MC' },
+    { position: 'DC', altPositions: ['DL'] },
+  ];
+  assert.equal(positionNeed(squad, 'ST'), 'gap');      // 1 cover
+  assert.equal(positionNeed(squad, 'MC'), 'surplus');  // 3 cover
+  assert.equal(positionNeed(squad, 'DL'), 'gap');      // 1 via alt
+  assert.equal(positionNeed(squad, 'GK'), 'gap');      // 0 cover
 });

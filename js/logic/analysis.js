@@ -202,6 +202,47 @@ export function developmentPlan(player, squadAvgQuality) {
   return { fastTrainer: ft, trainerTest: test, verdict, weaknesses: focus, session, intensity, greens, report };
 }
 
+// ---------- Auction bid valuation (free-to-play) ----------
+
+// How many tokens a bid target is worth to a free-to-play manager, who earns
+// roughly 1–3 tokens/day from ads and rewards (~30–60 per season). The model
+// prices TRAINING POTENTIAL (age) first — that's what F2P managers actually
+// buy — then adjusts for star level, star proximity, extras and squad need.
+const BID_BASE_BY_AGE = [
+  { maxAge: 19, base: 15 },
+  { maxAge: 21, base: 12 },
+  { maxAge: 23, base: 8 },
+  { maxAge: 26, base: 5 },
+  { maxAge: 99, base: 2 },
+];
+
+const BID_STAR_MULT = { 3: 0.7, 4: 1.0, 5: 1.2, 6: 1.5 };
+
+export function bidValuation({ age, stars = 4, endsIn49 = false, hasSpecialAbility = false, hasPlaystyle = false, need = 'normal' }) {
+  const base = BID_BASE_BY_AGE.find((b) => age <= b.maxAge).base;
+  const starMult = BID_STAR_MULT[stars] ?? 1.0;
+  const needMult = need === 'gap' ? 1.25 : need === 'surplus' ? 0.8 : 1.0;
+  let bonus = 0;
+  const notes = [];
+  if (endsIn49) { bonus += 2; notes.push('Quality ends in 4/9: the next star is one training step away (+2).'); }
+  if (hasSpecialAbility) { bonus += 2; notes.push('Special ability included — one star stronger whenever it triggers (+2).'); }
+  if (hasPlaystyle) { bonus += 2; notes.push('Playstyle already unlocked — saves weeks of levelling drills (+2).'); }
+  if (need === 'gap') notes.push('Fills a position your squad barely covers (×1.25).');
+  if (need === 'surplus') notes.push('You already have plenty for this position (×0.8) — only buy a clear upgrade.');
+  if (age <= 21) notes.push('Peak training age — every green invested compounds.');
+  if (age >= 27) notes.push('Near-zero training gains and falling resale value — pay scraps or pass.');
+  const maxBid = Math.max(1, Math.round(base * starMult * needMult + bonus));
+  return { base, starMult, needMult, bonus, maxBid, notes };
+}
+
+// Squad-derived positional need for the valuator.
+export function positionNeed(players, pos) {
+  const cover = players.filter((p) => p.position === pos || (p.altPositions || []).includes(pos)).length;
+  if (cover <= 1) return 'gap';
+  if (cover >= 3) return 'surplus';
+  return 'normal';
+}
+
 // ---------- Special-ability coverage ----------
 
 // Check the squad against the recommended special-ability kit.
