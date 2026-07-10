@@ -3,7 +3,7 @@ import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
 import { fastTrainerRating } from '../logic/analysis.js';
-import { recognizeScreenshot } from '../logic/ocr.js';
+import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
 
 export function renderSquad(view) {
@@ -14,12 +14,15 @@ export function renderSquad(view) {
     <div class="btn-row">
       <button class="btn" id="add-player">＋ Add player</button>
       <button class="btn secondary" id="scan-player">📷 From screenshot</button>
+      <button class="btn secondary" id="scan-video">🎬 From recording</button>
       <button class="btn secondary" id="export">Export JSON</button>
       <button class="btn secondary" id="import">Import JSON</button>
       <input type="file" id="import-file" accept="application/json,.json" class="sr-only">
       <input type="file" id="scan-file" accept="image/*" class="sr-only">
+      <input type="file" id="video-file" accept="video/*" class="sr-only">
     </div>
     <div id="scan-status"></div>
+    <div id="video-review"></div>
     <div id="editor"></div>
     <div id="compare-card"></div>
   `;
@@ -143,6 +146,7 @@ export function renderSquad(view) {
       if (result.name) draft.name = result.name;
       if (result.age) draft.age = result.age;
       if (result.quality) draft.quality = result.quality;
+      if (result.position) draft.position = result.position;
       drawEditor(null, draft);
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
@@ -204,6 +208,109 @@ export function renderSquad(view) {
     selA.addEventListener('change', drawTable);
     selB.addEventListener('change', drawTable);
     drawTable();
+  }
+
+  // ---------- Screen-recording bulk import ----------
+  const videoFile = view.querySelector('#video-file');
+  const videoReview = view.querySelector('#video-review');
+  view.querySelector('#scan-video').addEventListener('click', () => videoFile.click());
+  videoFile.addEventListener('change', async () => {
+    const file = videoFile.files[0];
+    videoFile.value = '';
+    if (!file) return;
+    videoReview.innerHTML = '';
+    scanStatus.innerHTML = `<div class="note">🎬 Preparing recording… <span class="hint">Scroll slowly through each player's profile when you record — 1–2 seconds per player. Everything runs on this device.</span></div>`;
+    try {
+      const { merged, frames } = await processRecording(file, (msg, progress) => {
+        scanStatus.innerHTML = `<div class="note">🎬 ${esc(msg)}${progress != null ? ` (${Math.round(progress * 100)}%)` : ''}</div>`;
+      });
+      if (!merged.length) {
+        scanStatus.innerHTML = `<div class="warn-note">Read ${frames} frames but couldn't identify any player profiles. Make sure the recording shows the profile screen with all 15 skills, held steady for a second or two per player.</div>`;
+        return;
+      }
+      scanStatus.innerHTML = `<div class="note">✅ Found <strong>${merged.length}</strong> player${merged.length === 1 ? '' : 's'} across ${frames} frames. Review below, then apply.</div>`;
+      drawVideoReview(merged);
+    } catch (e) {
+      scanStatus.innerHTML = `<div class="warn-note">Recording import failed: ${esc(e.message)}</div>`;
+    }
+  });
+
+  function drawVideoReview(merged) {
+    const plan = planSquadChanges(getPlayers(), merged);
+    videoReview.innerHTML = `
+      <div class="card">
+        <h3>Recording results</h3>
+        ${plan.map((item, i) => {
+          const s = item.sighting;
+          const badge = item.type === 'add'
+            ? '<span class="chip green">New</span>'
+            : item.type === 'update'
+              ? `<span class="chip blue">Update ${esc(item.player.name)}</span>`
+              : `<span class="chip">No changes — ${esc(item.player.name)}</span>`;
+          const changed = item.type === 'update'
+            ? Object.keys(item.changes.attrs || {}).length + (item.changes.age ? 1 : 0) + (item.changes.quality ? 1 : 0)
+            : 0;
+          return `
+            <div class="divider"></div>
+            <label class="check-row">
+              <input type="checkbox" data-apply="${i}" ${item.type === 'unchanged' ? 'disabled' : 'checked'}>
+              <span>
+                ${badge}
+                <span class="chip">${s.found}/15 skills</span>
+                ${s.position ? `<span class="chip">${esc(s.position)}</span>` : ''}
+                ${s.age ? `<span class="chip">age ${esc(s.age)}</span>` : ''}
+                ${s.quality ? `<span class="chip">${esc(s.quality)}%</span>` : ''}
+                ${item.type === 'update' ? `<span class="chip yellow">${changed} field${changed === 1 ? '' : 's'} changed</span>` : ''}
+              </span>
+            </label>
+            ${item.type === 'add' ? `
+              <label class="field" style="margin-left:28px"><span>Name${s.name ? '' : ' (not recognised — required)'}</span>
+                <input type="text" data-name="${i}" value="${esc(s.name || '')}" placeholder="Player name">
+              </label>` : ''}
+          `;
+        }).join('')}
+        <div class="btn-row">
+          <button class="btn" id="apply-video">Apply selected</button>
+          <button class="btn secondary" id="cancel-video">Discard</button>
+        </div>
+        <p class="hint">New players default to the recognised position (or MC) — open them afterwards to fix positions and gaps.</p>
+      </div>`;
+
+    videoReview.querySelector('#cancel-video').addEventListener('click', () => {
+      videoReview.innerHTML = '';
+      scanStatus.innerHTML = '';
+    });
+    videoReview.querySelector('#apply-video').addEventListener('click', () => {
+      let added = 0, updated = 0, skipped = 0;
+      plan.forEach((item, i) => {
+        const box = videoReview.querySelector(`[data-apply="${i}"]`);
+        if (!box || !box.checked || item.type === 'unchanged') return;
+        if (item.type === 'add') {
+          const name = (videoReview.querySelector(`[data-name="${i}"]`)?.value || '').trim();
+          if (!name) { skipped++; return; }
+          upsertPlayer({
+            id: newId(),
+            name,
+            position: item.sighting.position || 'MC',
+            altPositions: [],
+            age: item.sighting.age || 18,
+            quality: item.sighting.quality || 0,
+            attrs: item.sighting.attrs,
+          });
+          added++;
+        } else {
+          const p = { ...item.player, attrs: { ...(item.player.attrs || {}) } };
+          if (item.changes.age) p.age = item.changes.age;
+          if (item.changes.quality) p.quality = item.changes.quality;
+          Object.assign(p.attrs, item.changes.attrs || {});
+          upsertPlayer(p);
+          updated++;
+        }
+      });
+      videoReview.innerHTML = '';
+      scanStatus.innerHTML = `<div class="note">✅ Applied: ${added} added, ${updated} updated${skipped ? `, ${skipped} skipped (missing name)` : ''}.</div>`;
+      drawList();
+    });
   }
 
   fileInput.addEventListener('change', async () => {
