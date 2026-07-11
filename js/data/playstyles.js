@@ -69,6 +69,32 @@ export const PLAYSTYLES = [
     description: 'Starts attacks from the back with composed passing while still winning his duels.',
     drills: ['passing-circuit', 'def-positioning', 'aerial-defence'],
   },
+
+  // ---- Goalkeeper playstyles (official: Sweeper Keeper / Box Commander / Ball-Playing GK) ----
+  {
+    id: 'sweeper-keeper',
+    label: 'Sweeper Keeper',
+    category: 'Goalkeeper',
+    positions: ['GK'],
+    description: 'Comfortable off his line, rushing out to intercept long balls — an 11th outfield player. Wants rushing out, anticipation and agility.',
+    drills: ['gk-shot-stopping', 'def-positioning', 'aerial-defence'],
+  },
+  {
+    id: 'box-commander',
+    label: 'Box Commander',
+    category: 'Goalkeeper',
+    positions: ['GK'],
+    description: 'Rules his box — presence and aerial command intimidate strikers and dominate crosses and corners. Wants aerial reach, punching and communication.',
+    drills: ['aerial-defence', 'shot-blocking', 'gk-shot-stopping'],
+  },
+  {
+    id: 'ball-playing-gk',
+    label: 'Ball-Playing GK',
+    category: 'Goalkeeper',
+    positions: ['GK'],
+    description: 'Starts attacks with the ball at his feet and a sharp throw — the first passer. Wants kicking, throwing and concentration.',
+    drills: ['gk-shot-stopping', 'passing-circuit', 'def-positioning'],
+  },
 ];
 
 export function playstylesForPosition(pos) {

@@ -106,7 +106,7 @@ test('playstyles: valid positions and drill references, unique ids', () => {
   for (const s of PLAYSTYLES) {
     assert.ok(!ids.has(s.id), `duplicate playstyle ${s.id}`);
     ids.add(s.id);
-    assert.ok(['Attacker', 'Midfielder', 'Defender'].includes(s.category));
+    assert.ok(['Attacker', 'Midfielder', 'Defender', 'Goalkeeper'].includes(s.category));
     for (const pos of s.positions) assert.ok(POSITIONS.includes(pos), `${s.id}: bad position ${pos}`);
     assert.ok(s.drills.length >= 2);
     for (const d of s.drills) assert.ok(drillIds.has(d), `${s.id}: unknown drill ${d}`);
