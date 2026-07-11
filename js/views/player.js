@@ -1,7 +1,8 @@
 // Per-player development page: verdict, weaknesses, drill session, role fit.
 import { getPlayer, getPlayers, upsertPlayer, deletePlayer } from '../store.js';
 import { ROLES } from '../data/roles.js';
-import { developmentPlan, roleFit, attrLabel, classifyTrainerTest } from '../logic/analysis.js';
+import { developmentPlan, roleFit, attrLabel, classifyTrainerTest, powerTrainingReport, archetypeRating } from '../logic/analysis.js';
+import { POWER_TRAINING_NOTE } from '../data/powerstats.js';
 import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
 import { PLAYSTYLES, playstylesForPosition } from '../data/playstyles.js';
 import { abilityLabel } from '../data/abilities.js';
@@ -19,11 +20,34 @@ export function renderPlayer(view, id) {
   const plan = developmentPlan(p, avgQ);
   const fits = roleFit(p).slice(0, 4);
   const role = ROLES[p.position];
+  const power = powerTrainingReport(p);
+  const archetype = archetypeRating(p);
+  const ARCH_CHIP = { elite: 'green', strong: 'green', serviceable: 'yellow', raw: 'red' };
 
   view.innerHTML = `
     <a class="back-link" href="#/squad">← Squad</a>
     <h2 class="page-title">${esc(p.name)} ${posBadge(p.position)}</h2>
     <p class="page-sub">Age ${esc(p.age)} · ${esc(p.quality)}% quality${p.altPositions?.length ? ' · also plays ' + p.altPositions.map(esc).join('/') : ''}</p>
+
+    ${archetype ? `
+    <div class="card">
+      <h3>Best-player rating — key stats only</h3>
+      <p><span class="chip ${ARCH_CHIP[archetype.tier]}">${esc(archetype.label)}${archetype.hasValues ? ' · ' + archetype.score + '/100' : ''}</span>
+         ${archetype.fast ? '<span class="chip green">⚡ Fast — meta profile</span>' : ''}
+         ${archetype.speedKing && !archetype.fast ? '<span class="chip yellow">needs more Speed</span>' : ''}</p>
+      <p class="hint">${archetype.hasValues
+        ? 'Scored only on the attributes the match engine actually reads for a ' + esc((role ? role.label : p.position).toLowerCase()) + ' — overall quality % is misleading.'
+        : 'Add this player’s attribute values (✎ on the Squad page) to rate their key stats.'}</p>
+      <h4>Power-training targets ${power.speedKing ? '· Speed is king here' : ''}</h4>
+      ${power.hasValues ? power.items.map((it) => `
+        <div class="meter-row">
+          <span>${esc(it.label)}${power.speedKing && it.key === 'speed' ? ' ⚡' : ''}</span>
+          <div class="meter"><i class="${it.maxed ? '' : it.value === null ? 'bad' : 'warn'}" style="width:${it.value === null ? 0 : Math.min(100, (it.value / it.target) * 100)}%"></i></div>
+          <span class="val">${it.value === null ? '—' : it.value}${it.maxed ? ' ✓' : ' /' + it.target}</span>
+        </div>`).join('')
+        : `<p>${power.items.map((it) => `<span class="chip green">${esc(it.label)}</span>`).join(' ')}</p>`}
+      <p class="hint">${esc(POWER_TRAINING_NOTE)}</p>
+    </div>` : ''}
 
     <div class="card">
       <h3>Development verdict</h3>

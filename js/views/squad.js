@@ -2,7 +2,7 @@
 import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
-import { fastTrainerRating, saCoverage } from '../logic/analysis.js';
+import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
 import { SPECIAL_ABILITIES, matchAbility, abilityLabel } from '../data/abilities.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../data/playstyles.js';
 import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
@@ -47,7 +47,10 @@ export function renderSquad(view) {
         <div class="player-row" data-id="${esc(p.id)}">
           ${posBadge(p.position)}
           <div class="grow">
-            <div class="name">${esc(p.name)}${[4, 9].includes(Math.round(p.quality) % 10) ? ' <span class="chip green" title="One step from the next star">★+1 soon</span>' : ''}</div>
+            <div class="name">${esc(p.name)}${[4, 9].includes(Math.round(p.quality) % 10) ? ' <span class="chip green" title="One step from the next star">★+1 soon</span>' : ''}${(() => {
+              const a = archetypeRating(p);
+              return a && a.fast ? ' <span class="chip green" title="Fast — meta attacker profile">⚡</span>' : '';
+            })()}</div>
             <div class="meta">Age ${esc(p.age)}${p.specialAbility ? ' · ' + esc(abilityLabel(p.specialAbility)) : ''}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
           </div>
           <div class="quality">${esc(p.quality)}%</div>

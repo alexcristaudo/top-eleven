@@ -5,6 +5,8 @@ import { DRILLS } from '../data/drills.js';
 import { getFormation, FORMATIONS } from '../data/formations.js';
 import { ageSlabFactor, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
 import { RECOMMENDED_SA_KIT, SPECIAL_ABILITIES } from '../data/abilities.js';
+import { powerStatsFor, BENCHMARK_KEY_RATIO } from '../data/powerstats.js';
+import { attrLabel as attrLabelData } from '../data/attributes.js';
 
 // ---------- Fast-trainer / development ----------
 
@@ -187,6 +189,13 @@ export function developmentPlan(player, squadAvgQuality) {
   const report = weaknessReport(player, player.position);
   const focus = report.items.slice(0, 3);
   const needs = needsFromWeaknesses(report);
+  // Bias the session toward the position's key ("power") stats so training
+  // pushes what the match engine actually reads, not cosmetic grey stats.
+  const powerPlan = powerTrainingReport(player);
+  for (const it of powerPlan.items) {
+    if (it.maxed) continue; // already at target — don't waste the session on it
+    needs[it.key] = Math.max(needs[it.key] || 0, powerPlan.speedKing && it.key === 'speed' ? 4 : 3);
+  }
   const session = recommendDrills(needs, { budget: 30, position: player.position });
 
   const intensity =
@@ -241,6 +250,55 @@ export function positionNeed(players, pos) {
   if (cover <= 1) return 'gap';
   if (cover >= 3) return 'surplus';
   return 'normal';
+}
+
+// ---------- Best-player analysis (power stats, archetype, benchmark) ----------
+
+// Power-training plan: the key attributes for the player's position, each with
+// its current value and whether it still needs work. Grey stats are ignored.
+export function powerTrainingReport(player) {
+  const power = powerStatsFor(player.position);
+  const attrs = player.attrs || {};
+  const quality = player.quality || 0;
+  const target = Math.round(quality * BENCHMARK_KEY_RATIO);
+  const items = power.key.map((key) => {
+    const value = Number.isFinite(attrs[key]) ? attrs[key] : null;
+    return {
+      key,
+      label: attrLabelData(key),
+      value,
+      target,
+      gap: value === null ? null : Math.max(0, target - value),
+      maxed: value !== null && value >= target,
+    };
+  });
+  return { keys: power.key, speedKing: power.speedKing, target, items, hasValues: items.some((i) => i.value !== null) };
+}
+
+// Elite-archetype rating: how close a player is to a "best in game" player at
+// their position, judged ONLY on the key stats (the engine ignores the rest).
+// Speed-king positions weight Speed double. Returns 0–100 plus a tier + label.
+export function archetypeRating(player) {
+  const power = powerStatsFor(player.position);
+  const attrs = player.attrs || {};
+  if (!power.key.length) return null;
+  const target = Math.max(1, (player.quality || 0) * BENCHMARK_KEY_RATIO);
+  let sum = 0, wsum = 0;
+  for (const key of power.key) {
+    const w = (power.speedKing && key === 'speed') ? 2 : 1;
+    const v = Number.isFinite(attrs[key]) ? attrs[key] : (player.quality || 0);
+    sum += w * Math.min(1, v / target);
+    wsum += w;
+  }
+  const score = Math.round((sum / wsum) * 100);
+  const hasValues = power.key.some((k) => Number.isFinite(attrs[k]));
+  let tier, label;
+  if (score >= 92) { tier = 'elite'; label = power.speedKing ? 'Elite (meta-perfect)' : 'Elite'; }
+  else if (score >= 78) { tier = 'strong'; label = 'Strong'; }
+  else if (score >= 60) { tier = 'serviceable'; label = 'Serviceable'; }
+  else { tier = 'raw'; label = 'Below key-stat par'; }
+  const fast = power.speedKing && Number.isFinite(attrs.speed) && attrs.speed >= target * 0.95;
+  return { score, tier, label, speedKing: power.speedKing, fast, hasValues };
 }
 
 // ---------- Special-ability coverage ----------
