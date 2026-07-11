@@ -7,6 +7,7 @@ import {
   recommendDrills, needsFromWeaknesses, needsForPosition,
   developmentPlan, counterOptions, squadFitForFormation,
   bestXI, conditionPlan, rankFormations, bidValuation, positionNeed,
+  powerTrainingReport, archetypeRating,
 } from '../js/logic/analysis.js';
 import { getFormation } from '../js/data/formations.js';
 
@@ -257,4 +258,51 @@ test('positionNeed: reflects squad coverage', () => {
   assert.equal(positionNeed(squad, 'MC'), 'surplus');  // 3 cover
   assert.equal(positionNeed(squad, 'DL'), 'gap');      // 1 via alt
   assert.equal(positionNeed(squad, 'GK'), 'gap');      // 0 cover
+});
+
+test('powerTrainingReport: returns the position key stats with targets', () => {
+  const rep = powerTrainingReport(youngStriker);
+  assert.deepEqual(rep.keys, ['finishing', 'speed', 'shooting']);
+  assert.ok(rep.speedKing);
+  assert.equal(rep.target, Math.round(80 * 1.15)); // 92
+  const finishing = rep.items.find((i) => i.key === 'finishing');
+  assert.equal(finishing.value, 55);
+  assert.equal(finishing.maxed, false);
+  const speed = rep.items.find((i) => i.key === 'speed');
+  assert.equal(speed.value, 88);
+});
+
+test('archetypeRating: a fast striker with maxed key stats rates elite', () => {
+  const elite = {
+    position: 'ST', quality: 80,
+    attrs: { finishing: 95, speed: 98, shooting: 92, tackling: 20, marking: 15 },
+  };
+  const r = archetypeRating(elite);
+  assert.ok(r.score >= 92, `score ${r.score}`);
+  assert.equal(r.tier, 'elite');
+  assert.ok(r.fast);
+});
+
+test('archetypeRating: key stats decide, cosmetic stats ignored', () => {
+  // Same quality; one has key stats high + grey low, the other the reverse.
+  const keyStrong = { position: 'ST', quality: 70, attrs: { finishing: 90, speed: 90, shooting: 85, tackling: 90, marking: 90, passing: 90 } };
+  const keyWeak = { position: 'ST', quality: 70, attrs: { finishing: 40, speed: 45, shooting: 42, tackling: 95, marking: 95, passing: 95 } };
+  assert.ok(archetypeRating(keyStrong).score > archetypeRating(keyWeak).score + 25);
+});
+
+test('archetypeRating: speed-king positions weight speed double', () => {
+  const slow = { position: 'AML', quality: 80, attrs: { speed: 40, dribbling: 95, finishing: 95 } };
+  const fast = { position: 'AML', quality: 80, attrs: { speed: 95, dribbling: 60, finishing: 60 } };
+  // Both average ~ the same raw, but the fast one wins because speed counts twice.
+  assert.ok(archetypeRating(fast).score > archetypeRating(slow).score);
+});
+
+test('developmentPlan session is biased toward power stats', () => {
+  const raw = { id: 'r', name: 'Raw ST', position: 'ST', age: 19, quality: 80,
+    attrs: { finishing: 40, speed: 40, shooting: 40, positioning: 85, heading: 80 } };
+  const plan = developmentPlan(raw, 80);
+  const trained = new Set(plan.session.plan.flatMap((s) => Object.keys(s.drill.attrs)));
+  // At least one of the striker's key stats must be in the recommended session.
+  assert.ok(['finishing', 'speed', 'shooting'].some((k) => trained.has(k)),
+    `session trains ${[...trained]}`);
 });
