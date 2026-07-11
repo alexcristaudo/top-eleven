@@ -1,7 +1,7 @@
 // Squad tracker: list, add/edit form, export/import.
 import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
-import { ATTRIBUTES, GROUPS } from '../data/attributes.js';
+import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes.js';
 import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
 import { SPECIAL_ABILITIES, matchAbility, abilityLabel } from '../data/abilities.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../data/playstyles.js';
@@ -88,6 +88,18 @@ export function renderSquad(view) {
       </div>`;
   }
 
+  // Attribute input fields for the given position (GK gets goalkeeping skills).
+  function attrFieldsHtml(position, attrs) {
+    return groupsFor(position).map((g) => `
+      <h4>${esc(g.label)}</h4>
+      <div class="attr-grid">
+        ${attributesFor(position).filter((a) => a.group === g.id).map((a) => `
+          <label class="field"><span>${esc(a.label)}</span>
+            <input type="number" min="1" max="250" data-attr="${a.key}" value="${Number.isFinite(attrs?.[a.key]) ? esc(attrs[a.key]) : ''}">
+          </label>`).join('')}
+      </div>`).join('');
+  }
+
   function drawEditor(player, draft = null) {
     const p = player || {
       id: newId(), name: '', position: 'MC', altPositions: [], age: 18, quality: 20, attrs: {},
@@ -128,15 +140,8 @@ export function renderSquad(view) {
           </select>
         </label>
         <h4>Attributes (optional — enables precise weakness analysis)</h4>
-        <p class="hint">Enter the % value shown on each skill in-game. Leave blank to skip.</p>
-        ${GROUPS.map((g) => `
-          <h4>${esc(g.label)}</h4>
-          <div class="attr-grid">
-            ${ATTRIBUTES.filter((a) => a.group === g.id).map((a) => `
-              <label class="field"><span>${esc(a.label)}</span>
-                <input type="number" min="1" max="250" data-attr="${a.key}" value="${Number.isFinite(p.attrs?.[a.key]) ? esc(p.attrs[a.key]) : ''}">
-              </label>`).join('')}
-          </div>`).join('')}
+        <p class="hint">Enter the value shown on each skill in-game. Leave blank to skip. Goalkeepers show goalkeeping skills.</p>
+        <div id="attr-fields">${attrFieldsHtml(p.position, p.attrs)}</div>
         <div class="btn-row">
           <button class="btn" id="save">Save player</button>
           <button class="btn secondary" id="cancel">Cancel</button>
@@ -167,6 +172,15 @@ export function renderSquad(view) {
       });
       editorEl.innerHTML = '';
       drawList();
+    });
+    // Swap attribute fields when switching to/from goalkeeper, keeping values.
+    editorEl.querySelector('#f-pos').addEventListener('change', (e) => {
+      const current = {};
+      for (const inp of editorEl.querySelectorAll('[data-attr]')) {
+        const v = parseFloat(inp.value);
+        if (Number.isFinite(v)) current[inp.dataset.attr] = v;
+      }
+      editorEl.querySelector('#attr-fields').innerHTML = attrFieldsHtml(e.target.value, current);
     });
     editorEl.querySelector('#cancel').addEventListener('click', () => { editorEl.innerHTML = ''; });
     const del = editorEl.querySelector('#delete');
@@ -259,7 +273,13 @@ export function renderSquad(view) {
           <tr><th>Age / trainer</th>
             <td>${esc(a.age)} · ${esc(fastTrainerRating(a.age).label)}</td>
             <td>${esc(b.age)} · ${esc(fastTrainerRating(b.age).label)}</td></tr>
-          ${ATTRIBUTES.map((at) => row(at.label, a.attrs?.[at.key], b.attrs?.[at.key])).join('')}
+          ${(() => {
+            // Show the attribute set that fits the players. Two GKs → GK skills;
+            // otherwise outfield skills (a GK-vs-outfield compare only lines up
+            // on the shared physical stats, which is expected).
+            const set = (a.position === 'GK' && b.position === 'GK') ? attributesFor('GK') : ATTRIBUTES;
+            return set.map((at) => row(at.label, a.attrs?.[at.key], b.attrs?.[at.key])).join('');
+          })()}
         </table></div>
         <p class="hint">Green = higher value. Missing attributes show as —.</p>`;
     }

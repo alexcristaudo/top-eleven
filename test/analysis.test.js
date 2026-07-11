@@ -54,7 +54,21 @@ test('roleFit: attacking profile scores attacking roles above defensive ones', (
   const fits = roleFit(youngStriker);
   const score = (pos) => fits.find((f) => f.pos === pos).score;
   assert.ok(score('ST') > score('DC'));
-  assert.ok(score('AMC') > score('GK'));
+  assert.ok(score('AMC') > score('MC'));
+  // An outfield player is never suggested as a goalkeeper (disjoint skills).
+  assert.ok(!fits.some((f) => f.pos === 'GK'));
+});
+
+test('roleFit: a goalkeeper is only compared to GK', () => {
+  const keeper = {
+    position: 'GK', quality: 85,
+    attrs: { reflexes: 95, agility: 100, anticipation: 88, rushingOut: 90, communication: 92,
+      throwing: 80, kicking: 85, punching: 96, aerialReach: 91, concentration: 90,
+      speed: 60, strength: 55, fitness: 90, aggression: 70, creativity: 50 },
+  };
+  const fits = roleFit(keeper);
+  assert.deepEqual(fits.map((f) => f.pos), ['GK']);
+  assert.ok(fits[0].score > 0);
 });
 
 test('recommendDrills: respects budget and prefers matching drills', () => {

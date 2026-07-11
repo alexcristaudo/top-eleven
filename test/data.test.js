@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ATTR_KEYS, ATTRIBUTES, GROUPS } from '../js/data/attributes.js';
+import { ATTR_KEYS, GK_ATTR_KEYS, ATTRIBUTES, GROUPS } from '../js/data/attributes.js';
 import { ROLES, POSITIONS, POSITION_ZONE } from '../js/data/roles.js';
 import { DRILLS, DRILL_CATEGORIES, INTENSITY } from '../js/data/drills.js';
 import { FORMATIONS, getFormation, ORIENTATION_REFERENCE } from '../js/data/formations.js';
@@ -25,7 +25,9 @@ test('roles: every position has a complete weight map', () => {
     assert.ok(role, `missing role for ${pos}`);
     assert.ok(role.label && role.description);
     assert.ok(POSITION_ZONE[pos], `missing zone for ${pos}`);
-    for (const k of ATTR_KEYS) {
+    // Goalkeepers use the goalkeeping skill set; outfield use the 15 field skills.
+    const expectedKeys = pos === 'GK' ? GK_ATTR_KEYS : ATTR_KEYS;
+    for (const k of expectedKeys) {
       assert.ok(Number.isFinite(role.weights[k]), `role ${pos} missing weight for ${k}`);
       assert.ok(role.weights[k] >= 0 && role.weights[k] <= 3);
     }
