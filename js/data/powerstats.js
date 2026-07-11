@@ -5,7 +5,7 @@
 // Also the speed-first attacker meta: `speedKing` positions are the ones where
 // Speed is the single most decisive attribute (fast strikers/wingers dominate).
 export const POWER_STATS = {
-  GK:  { key: ['positioning', 'bravery', 'speed'], speedKing: false },
+  GK:  { key: ['reflexes', 'agility', 'aerialReach'], speedKing: false },
   DC:  { key: ['marking', 'tackling', 'heading'], speedKing: false },
   DL:  { key: ['speed', 'tackling', 'crossing'], speedKing: true },
   DR:  { key: ['speed', 'tackling', 'crossing'], speedKing: true },

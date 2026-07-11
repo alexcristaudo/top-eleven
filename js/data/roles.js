@@ -32,11 +32,12 @@ const winger = {
 export const ROLES = {
   GK: {
     label: 'Goalkeeper',
-    description: 'Shot-stopper and last line. Positioning, bravery and aerial command decide saves; speed helps rushing out one-on-one.',
+    description: 'Shot-stopper and last line. Reflexes, agility and aerial command decide saves; anticipation and rushing out handle one-on-ones.',
+    // Goalkeepers use the Goalkeeping skill set, not the outfield attributes.
     weights: {
-      tackling: 1, marking: 1, positioning: 3, heading: 2, bravery: 3,
-      passing: 1, dribbling: 0, crossing: 0, shooting: 0, finishing: 0,
-      speed: 2, strength: 2, fitness: 2, aggression: 1, creativity: 1,
+      reflexes: 3, agility: 3, anticipation: 2, rushingOut: 2, communication: 1,
+      throwing: 1, kicking: 1, punching: 2, aerialReach: 3, concentration: 2,
+      speed: 1, strength: 1, fitness: 2, aggression: 1, creativity: 1,
     },
   },
   DC: {

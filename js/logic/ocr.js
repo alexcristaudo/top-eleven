@@ -1,10 +1,19 @@
 // Screenshot import: local OCR (tesseract.js, bundled in vendor/) + parsing
 // of Top Eleven player-profile text. Nothing leaves the device.
-import { ATTR_KEYS } from '../data/attributes.js';
+import { ATTR_KEYS, GK_ATTR_KEYS } from '../data/attributes.js';
 import { POSITIONS } from '../data/roles.js';
 
 // Fuzzy label stems — OCR often mangles word endings, so match on the start.
-const ATTR_STEMS = {
+// Shared by outfield and GK parses.
+const PHYSICAL_STEMS = {
+  speed: /speed/i,
+  strength: /streng/i,
+  fitness: /fitnes/i,
+  aggression: /aggress/i,
+  creativity: /creativ/i,
+};
+
+const OUTFIELD_STEMS = {
   tackling: /tackl/i, // NOT /tack/: "ATTACK" contains "tack"
   marking: /marki/i,
   positioning: /positio/i,
@@ -15,11 +24,24 @@ const ATTR_STEMS = {
   crossing: /crossi/i,
   shooting: /shooti/i,
   finishing: /finish/i,
-  speed: /speed/i,
-  strength: /streng/i,
-  fitness: /fitnes/i,
-  aggression: /aggress/i,
-  creativity: /creativ/i,
+  ...PHYSICAL_STEMS,
+};
+
+// Goalkeeper skill stems. "Rushing out"/"Aerial reach" are two words — match
+// the distinctive first word. Avoid overlaps: "concentration" vs nothing,
+// "anticipation" vs nothing.
+const GK_STEMS = {
+  reflexes: /reflex/i,
+  agility: /agilit/i,
+  anticipation: /anticip/i,
+  rushingOut: /rush/i,
+  communication: /communic/i,
+  throwing: /throw/i,
+  kicking: /kicki?n/i,
+  punching: /punch/i,
+  aerialReach: /aerial/i,
+  concentration: /concentr/i,
+  ...PHYSICAL_STEMS,
 };
 
 function numbersIn(line) {
@@ -44,12 +66,23 @@ export function parsePlayerText(text) {
 
   const POS_RE = new RegExp(`(?:^|[^A-Z0-9])(${POSITIONS.join('|')})(?:[^A-Z0-9]|$)`);
 
+  // Detect a goalkeeper profile up front: keepers have an entirely different
+  // skill set (Goalkeeping replaces Defence+Attack), so we must use GK label
+  // stems or nothing matches. Signals: the "Goalkeeping" header, a standalone
+  // GK role, or GK-only skill words.
+  const joined = lines.join(' ');
+  const gkProfile = /goalkeep/i.test(joined)
+    || /\bGK\b/.test(joined)
+    || (/reflex/i.test(joined) && (/punch/i.test(joined) || /aerial/i.test(joined) || /rush/i.test(joined)));
+  const STEMS = gkProfile ? GK_STEMS : OUTFIELD_STEMS;
+  const keys = gkProfile ? GK_ATTR_KEYS : ATTR_KEYS;
+
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
     // Attribute lines: label stem + a plausible number on the same line.
-    for (const key of ATTR_KEYS) {
+    for (const key of keys) {
       if (attrs[key] !== undefined) continue;
-      const m = line.match(ATTR_STEMS[key]);
+      const m = line.match(STEMS[key]);
       if (!m) continue;
       const after = numbersIn(line.slice(m.index));
       const anywhere = numbersIn(line);
@@ -90,7 +123,7 @@ export function parsePlayerText(text) {
         if (v >= 1 && v <= 250) qualityOvr = v;
       }
     }
-    if (qualityPct === null && !/condition/i.test(line) && !ATTR_KEYS.some((k) => ATTR_STEMS[k].test(line))) {
+    if (qualityPct === null && !/condition/i.test(line) && !keys.some((k) => STEMS[k].test(line))) {
       const m = line.match(/(\d{1,3})\s*%/);
       if (m) {
         const v = parseInt(m[1], 10);
@@ -99,6 +132,7 @@ export function parsePlayerText(text) {
     }
   }
   quality = qualityOvr !== null ? qualityOvr : qualityPct;
+  if (gkProfile && position === null) position = 'GK';
 
   // Name: a "Firstname Lastname"-shaped line near the top that isn't UI text.
   // Unicode-aware (Cuscunà, Müller, …); tolerates a stray shirt number.
@@ -113,7 +147,7 @@ export function parsePlayerText(text) {
     if (words.length >= 2 && words.length <= 4 && letters >= 8
       && words[0].length >= 3 && words.some((w) => w.length >= 4)) {
       const candidate = words.slice(0, 3).join(' ');
-      const isSkillRow = ATTR_KEYS.some((k) => ATTR_STEMS[k].test(candidate));
+      const isSkillRow = keys.some((k) => STEMS[k].test(candidate));
       if (!UI_WORDS.test(candidate) && !isSkillRow && words.every((w) => /^\p{L}/u.test(w))) {
         name = candidate.replace(/(^|\s)\p{Ll}/gu, (c) => c.toUpperCase());
         break;
@@ -122,7 +156,7 @@ export function parsePlayerText(text) {
   }
 
   // Fall back: quality ≈ average of attributes when no % was found.
-  const values = ATTR_KEYS.map((k) => attrs[k]).filter((v) => v !== undefined);
+  const values = keys.map((k) => attrs[k]).filter((v) => v !== undefined);
   if (quality === null && values.length >= 10) {
     quality = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
   }

@@ -107,6 +107,40 @@ test('parses the real in-game Skills tab layout (three columns, OVR, accents)', 
   assert.equal(r.name, 'Cipriano Cuscuna');
 });
 
+// Real goalkeeper Skills tab (Matteo Ceravolo) — a completely different skill
+// set from outfield players: Goalkeeping replaces Defence + Attack.
+const REAL_GK_SKILLS = `Matteo Ceravolo
+OVR 89
+Age: 22   Roles: GK
+Team: Alexander FC   Special ability:
+GOALKEEPING 98   PHYSICAL 72
+Reflexes 96   Throwing 83   Fitness 96
+Agility 105   Kicking 92   Strength 53
+Anticipation 91   Punching 102   Aggression 75
+Rushing out 122   Aerial reach 91   Speed 73
+Communication 106   Concentration 94   Creativity 61`;
+
+test('parses a goalkeeper profile with the goalkeeping skill set', () => {
+  const r = parsePlayerText(REAL_GK_SKILLS);
+  assert.equal(r.position, 'GK');
+  assert.equal(r.attrs.reflexes, 96);
+  assert.equal(r.attrs.agility, 105);
+  assert.equal(r.attrs.rushingOut, 122);
+  assert.equal(r.attrs.punching, 102);
+  assert.equal(r.attrs.aerialReach, 91);
+  assert.equal(r.attrs.communication, 106);
+  assert.equal(r.attrs.concentration, 94);
+  assert.equal(r.attrs.fitness, 96);
+  assert.equal(r.attrs.speed, 73);
+  assert.equal(r.found, 15); // 10 goalkeeping + 5 physical
+  assert.equal(r.quality, 89);
+  assert.equal(r.age, 22);
+  assert.equal(r.name, 'Matteo Ceravolo');
+  // Must NOT have picked up outfield attributes.
+  assert.equal(r.attrs.tackling, undefined);
+  assert.equal(r.attrs.shooting, undefined);
+});
+
 test('parses the special ability from the profile header', () => {
   const r = parsePlayerText('Marco Rossi\nAge: 19\nSpecial ability: Free kick specialist\nTackling 40');
   assert.equal(r.specialAbility, 'free kick specialist');

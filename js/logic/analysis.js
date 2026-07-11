@@ -1,5 +1,5 @@
 // Pure analysis functions — no DOM, unit-testable with node --test.
-import { ATTRIBUTES, ATTR_KEYS, attrLabel } from '../data/attributes.js';
+import { ATTRIBUTES, ATTR_KEYS, attrLabel, attributesFor, attrKeysFor } from '../data/attributes.js';
 import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
 import { getFormation, FORMATIONS } from '../data/formations.js';
@@ -85,14 +85,17 @@ export function trainerVerdict(player, squadAvgQuality) {
 // Returns attributes ranked by how much they hold the player back in `position`.
 // If the player has no attribute values, falls back to role priorities alone.
 export function weaknessReport(player, position) {
-  const role = ROLES[position || player.position];
+  const pos = position || player.position;
+  const role = ROLES[pos];
   if (!role) return { hasValues: false, items: [] };
   const attrs = player.attrs || {};
-  const values = ATTR_KEYS.filter((k) => Number.isFinite(attrs[k]));
+  const attrList = attributesFor(pos);
+  const keyList = attrKeysFor(pos);
+  const values = keyList.filter((k) => Number.isFinite(attrs[k]));
   const hasValues = values.length >= 5;
 
   if (!hasValues) {
-    const items = ATTRIBUTES
+    const items = attrList
       .filter((a) => role.weights[a.key] >= 2)
       .map((a) => ({ key: a.key, label: a.label, weight: role.weights[a.key], value: null, score: role.weights[a.key] }))
       .sort((x, y) => y.weight - x.weight);
@@ -100,7 +103,7 @@ export function weaknessReport(player, position) {
   }
 
   const avg = values.reduce((s, k) => s + attrs[k], 0) / values.length;
-  const items = ATTRIBUTES
+  const items = attrList
     .map((a) => {
       const w = role.weights[a.key];
       const v = Number.isFinite(attrs[a.key]) ? attrs[a.key] : avg;
@@ -112,16 +115,20 @@ export function weaknessReport(player, position) {
   return { hasValues, items, avg };
 }
 
-// Best positions for a player's attribute profile, ranked.
+// Best positions for a player's attribute profile, ranked. Goalkeepers and
+// outfield players use disjoint skill sets, so a keeper is only compared to GK
+// and outfield players only to outfield positions.
 export function roleFit(player) {
   const attrs = player.attrs || {};
-  const values = ATTR_KEYS.filter((k) => Number.isFinite(attrs[k]));
+  const keyList = attrKeysFor(player.position);
+  const values = keyList.filter((k) => Number.isFinite(attrs[k]));
   if (values.length < 5) return [];
-  return POSITIONS
+  const candidates = player.position === 'GK' ? ['GK'] : POSITIONS.filter((p) => p !== 'GK');
+  return candidates
     .map((pos) => {
       const w = ROLES[pos].weights;
       let sum = 0, wsum = 0;
-      for (const k of ATTR_KEYS) {
+      for (const k of keyList) {
         if (w[k] > 0 && Number.isFinite(attrs[k])) { sum += w[k] * attrs[k]; wsum += w[k]; }
       }
       return { pos, label: ROLES[pos].label, score: wsum ? sum / wsum : 0 };
@@ -172,7 +179,7 @@ export function needsForPosition(position) {
   const role = ROLES[position];
   if (!role) return {};
   const needs = {};
-  for (const k of ATTR_KEYS) if (role.weights[k] >= 2) needs[k] = role.weights[k];
+  for (const k of attrKeysFor(position)) if (role.weights[k] >= 2) needs[k] = role.weights[k];
   return needs;
 }
 
