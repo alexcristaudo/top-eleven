@@ -6,6 +6,7 @@ export const SPECIAL_ABILITIES = [
   { id: 'corner', label: 'Corner Specialist', positions: ['MC', 'AMC', 'ML', 'MR', 'AML', 'AMR'] },
   { id: 'penalty', label: 'Penalty Specialist', positions: ['MC', 'AMC', 'ST', 'AML', 'AMR'] },
   { id: 'one-on-one-scorer', label: 'One-on-One Scorer', positions: ['ST', 'AML', 'AMR'] },
+  { id: 'dribbler', label: 'Dribbler', positions: ['AML', 'AMR', 'ML', 'MR', 'AMC', 'ST'] },
   { id: 'aerial-defender', label: 'Aerial Defender', positions: ['DC', 'DL', 'DR', 'DMC'] },
   { id: 'defensive-wall', label: 'Defensive Wall', positions: ['DC', 'DL', 'DR', 'DMC'] },
   { id: 'one-on-one-stopper', label: 'One-on-One Stopper', positions: ['GK'] },
@@ -38,6 +39,7 @@ export function matchAbility(text) {
   if (/wall/.test(t)) return 'defensive-wall';
   if (/one.?on.?one|1.?on.?1/.test(t)) return /stop/.test(t) ? 'one-on-one-stopper' : 'one-on-one-scorer';
   if (/playmak/.test(t)) return 'playmaker';
+  if (/drib/.test(t)) return 'dribbler';
   return null;
 }
 

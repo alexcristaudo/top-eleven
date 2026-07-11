@@ -120,6 +120,8 @@ test('abilities: kit references real abilities; OCR text maps to ids', () => {
   assert.equal(matchAbility('aerial defender'), 'aerial-defender');
   assert.equal(matchAbility('One on one stopper'), 'one-on-one-stopper');
   assert.equal(matchAbility('Playmaker'), 'playmaker');
+  assert.equal(matchAbility('Dribbler'), 'dribbler');
+  assert.equal(matchAbility('dribler'), 'dribbler'); // OCR misspelling
   assert.equal(matchAbility('None'), null);
   assert.equal(matchAbility(''), null);
 });
