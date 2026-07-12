@@ -196,7 +196,7 @@ export function renderSquad(view) {
   view.querySelector('#new-season').addEventListener('click', () => {
     const n = getPlayers().length;
     if (!n) { alert('No players to adjust yet.'); return; }
-    if (confirm(`New season: drop every player's rating by 20 to reflect the higher league level?\n\nThis lowers ${n} player${n === 1 ? '' : 's'} (attributes and ages are unchanged) and can't be undone — Export first if unsure.`)) {
+    if (confirm(`New season: drop every player's rating by 20 to reflect the higher league level?\n\nThis lowers quality and every attribute for ${n} player${n === 1 ? '' : 's'} (ages are unchanged) and can't be undone — Export first if unsure.`)) {
       seasonRollover(20);
       drawList();
     }
