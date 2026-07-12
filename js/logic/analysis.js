@@ -4,7 +4,7 @@ import { ROLES, POSITIONS } from '../data/roles.js';
 import { DRILLS } from '../data/drills.js';
 import { getFormation, FORMATIONS } from '../data/formations.js';
 import { ageSlabFactor, TRAINER_CLASSES, MIN_TESTS_FOR_VERDICT, RECOMMENDED_TESTS } from '../data/trainertest.js';
-import { RECOMMENDED_SA_KIT, SPECIAL_ABILITIES } from '../data/abilities.js';
+import { RECOMMENDED_SA_KIT, SPECIAL_ABILITIES, abilityIdsOf } from '../data/abilities.js';
 import { powerStatsFor, BENCHMARK_KEY_RATIO } from '../data/powerstats.js';
 import { attrLabel as attrLabelData } from '../data/attributes.js';
 
@@ -314,7 +314,7 @@ export function archetypeRating(player) {
 export function saCoverage(players) {
   return RECOMMENDED_SA_KIT.map((slot) => {
     const ability = SPECIAL_ABILITIES.find((a) => a.id === slot.id);
-    const holders = players.filter((p) => p.specialAbility === slot.id);
+    const holders = players.filter((p) => abilityIdsOf(p).includes(slot.id));
     return {
       id: slot.id,
       label: ability ? ability.label : slot.id,

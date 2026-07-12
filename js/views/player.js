@@ -5,7 +5,7 @@ import { developmentPlan, roleFit, attrLabel, classifyTrainerTest, powerTraining
 import { POWER_TRAINING_NOTE } from '../data/powerstats.js';
 import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
 import { PLAYSTYLES, playstylesForPosition } from '../data/playstyles.js';
-import { abilityLabel } from '../data/abilities.js';
+import { abilityLabel, abilityIdsOf } from '../data/abilities.js';
 import { DRILLS } from '../data/drills.js';
 import { esc, posBadge, meterRow } from './ui.js';
 
@@ -102,7 +102,7 @@ export function renderPlayer(view, id) {
           <p class="hint">Unlock it in the game (player → Playstyle tab), then record it via the edit form (✎ on the Squad page).</p>
         ` : '<p class="hint">No defined playstyles for this position — goalkeepers and some roles don’t use them.</p>';
       })()}
-      ${p.specialAbility ? `<p>Special ability: <span class="chip blue">${esc(abilityLabel(p.specialAbility))}</span></p>` : ''}
+      ${abilityIdsOf(p).length ? `<p>Special abilit${abilityIdsOf(p).length === 1 ? 'y' : 'ies'}: ${abilityIdsOf(p).map((id) => `<span class="chip blue">${esc(abilityLabel(id))}</span>`).join(' ')}</p>` : ''}
     </div>
 
     <div class="card">
