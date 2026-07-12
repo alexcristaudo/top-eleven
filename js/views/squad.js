@@ -1,5 +1,5 @@
 // Squad tracker: list, add/edit form, export/import.
-import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad } from '../store.js';
+import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad, seasonRollover } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes.js';
 import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
@@ -17,6 +17,7 @@ export function renderSquad(view) {
       <button class="btn" id="add-player">＋ Add player</button>
       <button class="btn secondary" id="scan-player">📷 From screenshot</button>
       <button class="btn secondary" id="scan-video">🎬 From recording</button>
+      <button class="btn secondary" id="new-season">🔄 New season −20</button>
       <button class="btn secondary" id="export">Export JSON</button>
       <button class="btn secondary" id="import">Import JSON</button>
       <input type="file" id="import-file" accept="application/json,.json" class="sr-only">
@@ -191,6 +192,15 @@ export function renderSquad(view) {
   }
 
   view.querySelector('#add-player').addEventListener('click', () => drawEditor(null));
+
+  view.querySelector('#new-season').addEventListener('click', () => {
+    const n = getPlayers().length;
+    if (!n) { alert('No players to adjust yet.'); return; }
+    if (confirm(`New season: drop every player's rating by 20 to reflect the higher league level?\n\nThis lowers ${n} player${n === 1 ? '' : 's'} (attributes and ages are unchanged) and can't be undone — Export first if unsure.`)) {
+      seasonRollover(20);
+      drawList();
+    }
+  });
 
   // ---------- Screenshot import (local OCR) ----------
   const scanFile = view.querySelector('#scan-file');
