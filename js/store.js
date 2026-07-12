@@ -37,13 +37,21 @@ export function deletePlayer(id) {
 }
 
 // Season rollover: quality re-scales down against the new (higher) league
-// level. Drops every player's rating by `amount` (default 20), floored at 1.
-// Attributes, age and everything else are left untouched.
+// level. Since quality is the average of the attributes, the individual skills
+// drop too — so this lowers every attribute AND the quality by `amount`
+// (default 20), each floored at 1. Age and everything else are untouched.
 export function seasonRollover(amount = 20) {
-  const players = load().map((p) => ({
-    ...p,
-    quality: Math.max(1, Math.round((p.quality || 0) - amount)),
-  }));
+  const players = load().map((p) => {
+    const attrs = {};
+    for (const [k, v] of Object.entries(p.attrs || {})) {
+      attrs[k] = Number.isFinite(v) ? Math.max(1, Math.round(v - amount)) : v;
+    }
+    return {
+      ...p,
+      quality: Math.max(1, Math.round((p.quality || 0) - amount)),
+      attrs,
+    };
+  });
   save(players);
   return players.length;
 }
