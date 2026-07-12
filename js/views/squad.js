@@ -3,7 +3,7 @@ import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes.js';
 import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
-import { SPECIAL_ABILITIES, matchAbility, abilityLabel } from '../data/abilities.js';
+import { SPECIAL_ABILITIES, abilityLabel, abilityIdsOf } from '../data/abilities.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../data/playstyles.js';
 import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
@@ -52,7 +52,7 @@ export function renderSquad(view) {
               const a = archetypeRating(p);
               return a && a.fast ? ' <span class="chip green" title="Fast — meta attacker profile">⚡</span>' : '';
             })()}</div>
-            <div class="meta">Age ${esc(p.age)}${p.specialAbility ? ' · ' + esc(abilityLabel(p.specialAbility)) : ''}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
+            <div class="meta">Age ${esc(p.age)}${abilityIdsOf(p).length ? ' · ' + abilityIdsOf(p).map((id) => esc(abilityLabel(id))).join(', ') : ''}${p.altPositions?.length ? ' · also ' + p.altPositions.map(esc).join('/') : ''}</div>
           </div>
           <div class="quality">${esc(p.quality)}%</div>
           <button class="btn secondary small" data-edit="${esc(p.id)}" aria-label="Edit ${esc(p.name)}">✎</button>
@@ -85,7 +85,7 @@ export function renderSquad(view) {
           <p>${k.covered ? '✅' : '❌'} <strong>${esc(k.label)}</strong> ×${k.want}
             ${k.holders.length ? `— ${k.holders.map((h) => esc(h.name)).join(', ')}` : '<span class="chip red">nobody</span>'}
             <br><span class="hint">${esc(k.why)}</span></p>`).join('')}
-        <p class="hint">Set each player's special ability in the edit form (✎), or import it automatically from screenshots/recordings.</p>
+        <p class="hint">Set each player's special abilities in the edit form (✎), or import them automatically — capture the player's <strong>Special Abilities</strong> screen (where each is named) so OCR can read them.</p>
       </div>`;
   }
 
@@ -121,20 +121,18 @@ export function renderSquad(view) {
           <label class="field"><span>Quality % (overall)</span><input type="number" id="f-quality" min="1" max="200" value="${esc(p.quality)}"></label>
           <label class="field"><span>Alt positions (comma-sep, e.g. DL,ML)</span><input type="text" id="f-alt" value="${esc((p.altPositions || []).join(','))}"></label>
         </div>
-        <div class="field-row">
-          <label class="field"><span>Special ability</span>
-            <select id="f-sa">
-              <option value="">None</option>
-              ${SPECIAL_ABILITIES.map((a) => `<option value="${a.id}" ${p.specialAbility === a.id ? 'selected' : ''}>${esc(a.label)}</option>`).join('')}
-            </select>
-          </label>
-          <label class="field"><span>Playstyle</span>
-            <select id="f-playstyle">
-              <option value="">None</option>
-              ${PLAYSTYLES.map((s) => `<option value="${s.id}" ${p.playstyle === s.id ? 'selected' : ''}>${esc(s.label)} (${esc(s.category)})</option>`).join('')}
-            </select>
-          </label>
+        <div class="field">
+          <span>Special abilities <span class="hint">(a player can hold several)</span></span>
+          <div class="sa-checks">
+            ${SPECIAL_ABILITIES.map((a) => `<label class="sa-check"><input type="checkbox" name="f-sa" value="${a.id}" ${abilityIdsOf(p).includes(a.id) ? 'checked' : ''}> ${esc(a.label)}</label>`).join('')}
+          </div>
         </div>
+        <label class="field"><span>Playstyle</span>
+          <select id="f-playstyle">
+            <option value="">None</option>
+            ${PLAYSTYLES.map((s) => `<option value="${s.id}" ${p.playstyle === s.id ? 'selected' : ''}>${esc(s.label)} (${esc(s.category)})</option>`).join('')}
+          </select>
+        </label>
         <label class="field"><span>Playstyle level</span>
           <select id="f-playstyle-level">
             ${PLAYSTYLE_LEVELS.map((l) => `<option ${p.playstyleLevel === l ? 'selected' : ''}>${l}</option>`).join('')}
@@ -166,7 +164,8 @@ export function renderSquad(view) {
         altPositions: editorEl.querySelector('#f-alt').value.split(',').map((s) => s.trim().toUpperCase()).filter((s) => POSITIONS.includes(s)),
         age: parseInt(editorEl.querySelector('#f-age').value, 10) || 18,
         quality: parseFloat(editorEl.querySelector('#f-quality').value) || 0,
-        specialAbility: editorEl.querySelector('#f-sa').value || null,
+        specialAbilities: [...editorEl.querySelectorAll('input[name="f-sa"]:checked')].map((el) => el.value),
+        specialAbility: null, // superseded by specialAbilities (kept null for back-compat readers)
         playstyle: editorEl.querySelector('#f-playstyle').value || null,
         playstyleLevel: editorEl.querySelector('#f-playstyle-level').value,
         attrs,
@@ -227,8 +226,7 @@ export function renderSquad(view) {
       if (result.age) draft.age = result.age;
       if (result.quality) draft.quality = result.quality;
       if (result.position) draft.position = result.position;
-      const sa = matchAbility(result.specialAbility);
-      if (sa) draft.specialAbility = sa;
+      if (result.specialAbilities?.length) draft.specialAbilities = result.specialAbilities;
       drawEditor(null, draft);
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
@@ -339,7 +337,7 @@ export function renderSquad(view) {
               ? `<span class="chip blue">Update ${esc(item.player.name)}</span>`
               : `<span class="chip">No changes — ${esc(item.player.name)}</span>`;
           const changed = item.type === 'update'
-            ? Object.keys(item.changes.attrs || {}).length + (item.changes.age ? 1 : 0) + (item.changes.quality ? 1 : 0)
+            ? Object.keys(item.changes.attrs || {}).length + (item.changes.age ? 1 : 0) + (item.changes.quality ? 1 : 0) + (item.changes.addedAbilities?.length || 0)
             : 0;
           return `
             <div class="divider"></div>
@@ -351,6 +349,7 @@ export function renderSquad(view) {
                 ${s.position ? `<span class="chip">${esc(s.position)}</span>` : ''}
                 ${s.age ? `<span class="chip">age ${esc(s.age)}</span>` : ''}
                 ${s.quality ? `<span class="chip">${esc(s.quality)}%</span>` : ''}
+                ${(s.specialAbilities || []).map((id) => `<span class="chip blue">${esc(abilityLabel(id))}</span>`).join('')}
                 ${item.type === 'update' ? `<span class="chip yellow">${changed} field${changed === 1 ? '' : 's'} changed</span>` : ''}
               </span>
             </label>
@@ -386,7 +385,7 @@ export function renderSquad(view) {
             altPositions: [],
             age: item.sighting.age || 18,
             quality: item.sighting.quality || 0,
-            specialAbility: matchAbility(item.sighting.specialAbility),
+            specialAbilities: item.sighting.specialAbilities || [],
             attrs: item.sighting.attrs,
           });
           added++;
@@ -395,6 +394,10 @@ export function renderSquad(view) {
           if (item.changes.age) p.age = item.changes.age;
           if (item.changes.quality) p.quality = item.changes.quality;
           Object.assign(p.attrs, item.changes.attrs || {});
+          if (item.changes.addedAbilities?.length) {
+            p.specialAbilities = [...abilityIdsOf(item.player), ...item.changes.addedAbilities];
+            p.specialAbility = null;
+          }
           upsertPlayer(p);
           updated++;
         }

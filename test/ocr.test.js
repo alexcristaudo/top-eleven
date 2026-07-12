@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePlayerText, mergeSightings, planSquadChanges, sameName } from '../js/logic/ocr.js';
+import { detectAbilities } from '../js/data/abilities.js';
 
 const CLEAN_PROFILE = `
 Marco Rossi
@@ -144,8 +145,48 @@ test('parses a goalkeeper profile with the goalkeeping skill set', () => {
 test('parses the special ability from the profile header', () => {
   const r = parsePlayerText('Marco Rossi\nAge: 19\nSpecial ability: Free kick specialist\nTackling 40');
   assert.equal(r.specialAbility, 'free kick specialist');
+  assert.deepEqual(r.specialAbilities, ['free-kick']);
   const none = parsePlayerText('Marco Rossi\nSpecial ability: None');
   assert.equal(none.specialAbility, null);
+  assert.deepEqual(none.specialAbilities, []);
+});
+
+test('detectAbilities: reads named abilities anywhere, supports several at once', () => {
+  // A real Special Abilities screen lists each by name.
+  assert.deepEqual(
+    detectAbilities('Special Abilities\nFree-Kick Specialist\nCorner Specialist\nPlaymaker'),
+    ['free-kick', 'corner', 'playmaker'],
+  );
+  // OCR-mangled spellings still resolve.
+  assert.deepEqual(detectAbilities('Aerlal Defender'), ['aerial-defender']);
+  assert.deepEqual(detectAbilities('Fr3e Klck Speclallst'), ['free-kick']);
+  assert.deepEqual(detectAbilities('Defensive Wall'), ['defensive-wall']);
+  // "Stopper" variants must not also register the plain sibling.
+  assert.deepEqual(detectAbilities('Penalty Stopper'), ['penalty-stopper']);
+  assert.deepEqual(detectAbilities('One-on-One Stopper'), ['one-on-one-stopper']);
+  assert.deepEqual(detectAbilities('One on One Scorer'), ['one-on-one-scorer']);
+  // Result is in canonical order regardless of the order read.
+  assert.deepEqual(detectAbilities('Playmaker Corner Specialist Dribbler'), ['corner', 'dribbler', 'playmaker']);
+});
+
+test('detectAbilities: never false-fires on attribute names', () => {
+  // "Dribbling" attribute must not be read as the "Dribbler" ability, and the
+  // goalkeeper "Aerial reach" attribute must not be read as "Aerial Defender".
+  assert.deepEqual(parsePlayerText(CLEAN_PROFILE).specialAbilities, []);
+  assert.deepEqual(parsePlayerText(REAL_SKILLS_TAB).specialAbilities, []);
+  assert.deepEqual(parsePlayerText(REAL_GK_SKILLS).specialAbilities, []);
+  assert.deepEqual(detectAbilities('Dribbling 70\nAerial reach 91\nCrossing 55'), []);
+});
+
+test('mergeSightings: unions abilities seen across a player’s frames', () => {
+  const skills = parsePlayerText(CLEAN_PROFILE); // no abilities on the skills tab
+  const abilityScreen = {
+    name: 'Marco Rossi', age: 19, quality: 84, position: 'ST',
+    specialAbilities: ['free-kick', 'penalty'], attrs: { ...skills.attrs }, found: 15,
+  };
+  const merged = mergeSightings([skills, abilityScreen]);
+  assert.equal(merged.length, 1);
+  assert.deepEqual(merged[0].specialAbilities.sort(), ['free-kick', 'penalty']);
 });
 
 test('real Overview tab: header info without skills, condition % ignored', () => {
@@ -226,6 +267,15 @@ test('mergeSightings: folds name-variant entries in a final dedupe pass', () => 
   const konyuy = merged.find((m) => m.name === 'Raoul Konyuy'); // cleaner variant kept
   assert.ok(konyuy, `expected clean name, got ${merged.map((m) => m.name)}`);
   assert.equal(konyuy.sightings, 2);
+});
+
+test('planSquadChanges: a newly seen ability becomes an update', () => {
+  const existing = [{ id: 'x', name: 'Marco Rossi', position: 'ST', age: 19, quality: 84, attrs: {}, specialAbilities: ['free-kick'] }];
+  const plan = planSquadChanges(existing, [
+    { name: 'Marco Rossi', age: 19, quality: 84, attrs: {}, specialAbilities: ['free-kick', 'penalty'], found: 15, sightings: 1 },
+  ]);
+  assert.equal(plan[0].type, 'update');
+  assert.deepEqual(plan[0].changes.addedAbilities, ['penalty']); // free-kick already known
 });
 
 test('planSquadChanges: fuzzy name match updates instead of duplicating', () => {

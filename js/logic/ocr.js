@@ -2,6 +2,7 @@
 // of Top Eleven player-profile text. Nothing leaves the device.
 import { ATTR_KEYS, GK_ATTR_KEYS } from '../data/attributes.js';
 import { POSITIONS } from '../data/roles.js';
+import { detectAbilities, abilityIdsOf } from '../data/abilities.js';
 
 // Fuzzy label stems — OCR often mangles word endings, so match on the start.
 // Shared by outfield and GK parses.
@@ -134,6 +135,13 @@ export function parsePlayerText(text) {
   quality = qualityOvr !== null ? qualityOvr : qualityPct;
   if (gkProfile && position === null) position = 'GK';
 
+  // Special abilities: scan the WHOLE profile, not just a "Special ability:"
+  // label. In-game that label is followed by icons (unreadable), whereas the
+  // ability NAMES are printed as text on the Special Abilities screen and in
+  // profile headers — and a player can hold several at once.
+  const specialAbilities = detectAbilities(joined);
+  if (!specialAbility && specialAbilities.length) specialAbility = specialAbilities[0];
+
   // Name: a "Firstname Lastname"-shaped line near the top that isn't UI text.
   // Unicode-aware (Cuscunà, Müller, …); tolerates a stray shirt number.
   const UI_WORDS = /profile|player|skills|attack|defen[cs]e|physical|mental|value|contract|bid|quality|form|age|team|roles|overview|playstyle|stats|celebrat|trainer|injur|morale|condition|special|ability|squad|lineup|formation|tactic|tier|very|good|happy|weight|height|foot/i;
@@ -161,7 +169,7 @@ export function parsePlayerText(text) {
     quality = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
   }
 
-  return { attrs, age, quality, name, position, specialAbility, found: values.length };
+  return { attrs, age, quality, name, position, specialAbility, specialAbilities, found: values.length };
 }
 
 // ---------- Recording support: merge frame parses into distinct players ----------
@@ -229,6 +237,11 @@ function mergeInto(target, p) {
   if (!target.quality && p.quality) target.quality = p.quality;
   if (!target.position && p.position) target.position = p.position;
   if (!target.specialAbility && p.specialAbility) target.specialAbility = p.specialAbility;
+  // Abilities can be read off different frames (header vs. abilities screen) —
+  // take the union so nothing seen in any frame is lost.
+  for (const id of p.specialAbilities || []) {
+    if (!target.specialAbilities.includes(id)) target.specialAbilities.push(id);
+  }
   for (const [k, v] of Object.entries(p.attrs)) {
     if (target.attrs[k] === undefined) target.attrs[k] = v;
   }
@@ -260,6 +273,7 @@ export function mergeSightings(parses, minFound = 6) {
       const entry = {
         name: p.name, age: p.age, quality: p.quality, position: p.position,
         specialAbility: p.specialAbility || null,
+        specialAbilities: [...(p.specialAbilities || [])],
         attrs: { ...p.attrs }, found: p.found, sightings: 1,
       };
       if (!entry.name && lastHeader
@@ -302,6 +316,10 @@ export function planSquadChanges(existingPlayers, merged) {
       if ((match.attrs || {})[k] !== v) attrChanges[k] = v;
     }
     if (Object.keys(attrChanges).length) changes.attrs = attrChanges;
+    // Abilities the recording revealed that aren't already on the saved player.
+    const have = abilityIdsOf(match);
+    const addedAbilities = (m.specialAbilities || []).filter((id) => !have.includes(id));
+    if (addedAbilities.length) changes.addedAbilities = addedAbilities;
     const type = Object.keys(changes).length ? 'update' : 'unchanged';
     return { type, player: match, sighting: m, changes };
   });
@@ -441,7 +459,9 @@ export async function recognizeScreenshot(file, onProgress) {
   try {
     onProgress?.('Reading screenshot…', null);
     const bitmap = await createImageBitmap(file);
-    return await session.recognizeAuto(bitmap, bitmap.width, bitmap.height);
+    // A single still can afford a higher-resolution pass than a video frame —
+    // it sharpens the small skill digits and special-ability labels.
+    return await session.recognizeAuto(bitmap, bitmap.width, bitmap.height, 2200);
   } finally {
     await session.terminate();
   }

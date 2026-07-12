@@ -283,6 +283,17 @@ label.check-row input {
 }
 label.check-row .done { color: var(--muted); text-decoration: line-through; }
 
+/* Special-ability multi-select in the player editor */
+.sa-checks {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 12px; margin-top: 4px;
+}
+label.sa-check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px; color: #cdd8ea; cursor: pointer; padding: 3px 0;
+}
+label.sa-check input { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
+
 /* ---------- Misc ---------- */
 .empty {
   text-align: center; color: var(--muted); padding: 28px 12px; font-size: 13.5px;

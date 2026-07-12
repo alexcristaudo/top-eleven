@@ -10,7 +10,7 @@ import { GUIDES } from '../js/data/guides.js';
 import { SEASON_CHECKLIST, ALL_TASK_IDS, TOKEN_CATEGORIES } from '../js/data/checklist.js';
 import { TEAMPLAY_BONUSES, BONUS_MAX, BONUS_DECAY } from '../js/data/teamplay.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../js/data/playstyles.js';
-import { SPECIAL_ABILITIES, RECOMMENDED_SA_KIT, matchAbility } from '../js/data/abilities.js';
+import { SPECIAL_ABILITIES, RECOMMENDED_SA_KIT, matchAbility, detectAbilities, abilityIdsOf } from '../js/data/abilities.js';
 
 test('attributes: 15 skills across 3 groups, unique keys', () => {
   assert.equal(ATTRIBUTES.length, 15);
@@ -126,6 +126,13 @@ test('abilities: kit references real abilities; OCR text maps to ids', () => {
   assert.equal(matchAbility('dribler'), 'dribbler'); // OCR misspelling
   assert.equal(matchAbility('None'), null);
   assert.equal(matchAbility(''), null);
+  // detectAbilities returns every ability present, in canonical order.
+  assert.deepEqual(detectAbilities('Corner Specialist and Free-Kick Specialist'), ['free-kick', 'corner']);
+  assert.deepEqual(detectAbilities('nothing here'), []);
+  // abilityIdsOf bridges the legacy single field and the new array.
+  assert.deepEqual(abilityIdsOf({ specialAbility: 'playmaker' }), ['playmaker']);
+  assert.deepEqual(abilityIdsOf({ specialAbilities: ['corner', 'penalty'] }), ['corner', 'penalty']);
+  assert.deepEqual(abilityIdsOf({}), []);
 });
 
 test('checklist: unique task ids across phases; token categories valid', () => {
