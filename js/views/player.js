@@ -99,7 +99,7 @@ export function renderPlayer(view, id) {
           ${options.map((s) => `
             <p><strong>${esc(s.label)}</strong> — ${esc(s.description)}<br>
             <span class="hint">Levelled by: ${s.drills.map((id) => { const d = DRILLS.find((x) => x.id === id); return d ? esc(d.name) : id; }).join(', ')}</span></p>`).join('')}
-          <p class="hint">Unlock it in the game (player → Playstyle tab), then record it via the edit form (✎ on the Squad page).</p>
+          <p class="hint">Unlock it in the game (player → Playstyle tab), then set it via the edit form (✎ on the Squad page) — or capture the Playstyle screen and the OCR importer reads it automatically.</p>
         ` : '<p class="hint">No defined playstyles for this position — goalkeepers and some roles don’t use them.</p>';
       })()}
       ${abilityIdsOf(p).length ? `<p>Special abilit${abilityIdsOf(p).length === 1 ? 'y' : 'ies'}: ${abilityIdsOf(p).map((id) => `<span class="chip blue">${esc(abilityLabel(id))}</span>`).join(' ')}</p>` : ''}

@@ -9,7 +9,7 @@ import { FORMATIONS, getFormation, ORIENTATION_REFERENCE } from '../js/data/form
 import { GUIDES } from '../js/data/guides.js';
 import { SEASON_CHECKLIST, ALL_TASK_IDS, TOKEN_CATEGORIES } from '../js/data/checklist.js';
 import { TEAMPLAY_BONUSES, BONUS_MAX, BONUS_DECAY } from '../js/data/teamplay.js';
-import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../js/data/playstyles.js';
+import { PLAYSTYLES, PLAYSTYLE_LEVELS, detectPlaystyles, detectPlaystyleLevel, playstyleLabel } from '../js/data/playstyles.js';
 import { SPECIAL_ABILITIES, RECOMMENDED_SA_KIT, matchAbility, detectAbilities, abilityIdsOf } from '../js/data/abilities.js';
 
 test('attributes: 15 skills across 3 groups, unique keys', () => {
@@ -112,6 +112,28 @@ test('playstyles: valid positions and drill references, unique ids', () => {
     for (const d of s.drills) assert.ok(drillIds.has(d), `${s.id}: unknown drill ${d}`);
   }
   assert.deepEqual(PLAYSTYLE_LEVELS, ['None', 'Basic', 'Advanced', 'Master']);
+});
+
+test('playstyles: OCR detection resolves names, levels, and avoids collisions', () => {
+  // Every canonical label must be detectable from its own text.
+  for (const s of PLAYSTYLES) {
+    assert.deepEqual(detectPlaystyles(s.label), [s.id], `label "${s.label}" should detect ${s.id}`);
+  }
+  // OCR-mangled spellings still resolve.
+  assert.deepEqual(detectPlaystyles('R3gista'), ['regista']);
+  assert.deepEqual(detectPlaystyles('Sw3eper Keeper'), ['sweeper-keeper']);
+  // Paired styles must not cross-match.
+  assert.deepEqual(detectPlaystyles('Ball-Playing GK'), ['ball-playing-gk']);
+  assert.deepEqual(detectPlaystyles('Ball-Playing Defender'), ['ball-playing-defender']);
+  assert.deepEqual(detectPlaystyles('Box Commander'), ['box-commander']);
+  assert.deepEqual(detectPlaystyles('Box-to-Box'), ['box-to-box']);
+  // Must NOT fire on attribute/header words.
+  assert.deepEqual(detectPlaystyles('Positioning 82\nGOALKEEPING 98\nCommunication 106'), []);
+  // Level detection: one word → that level; several (a "how to level" list) → null.
+  assert.equal(detectPlaystyleLevel('Playstyle: Regista (Advanced)'), 'Advanced');
+  assert.equal(detectPlaystyleLevel('Basic Advanced Master'), null);
+  assert.equal(detectPlaystyleLevel('no level here'), null);
+  assert.equal(playstyleLabel('regista'), 'Regista');
 });
 
 test('abilities: kit references real abilities; OCR text maps to ids', () => {

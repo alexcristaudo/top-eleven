@@ -178,6 +178,34 @@ test('detectAbilities: never false-fires on attribute names', () => {
   assert.deepEqual(detectAbilities('Dribbling 70\nAerial reach 91\nCrossing 55'), []);
 });
 
+test('parsePlayerText: reads an active playstyle and its level from the screen', () => {
+  const r = parsePlayerText('Marco Rossi\nST\nPlaystyle: Poacher (Advanced)\nShooting 90\nFinishing 88');
+  assert.equal(r.playstyle, 'poacher');
+  assert.equal(r.playstyleLevel, 'Advanced');
+  // A plain skills tab names no playstyle.
+  const none = parsePlayerText(CLEAN_PROFILE);
+  assert.equal(none.playstyle, null);
+  assert.equal(none.playstyleLevel, null);
+  // The "Positioning" attribute must not be read as a playstyle.
+  assert.equal(parsePlayerText(REAL_SKILLS_TAB).playstyle, null);
+});
+
+test('planSquadChanges: fills in a playstyle only when the player has none', () => {
+  const withStyle = [{ id: 'x', name: 'Marco Rossi', position: 'ST', age: 19, quality: 84, attrs: {}, playstyle: 'target-man' }];
+  const plan1 = planSquadChanges(withStyle, [
+    { name: 'Marco Rossi', age: 19, quality: 84, attrs: {}, playstyle: 'poacher', playstyleLevel: 'Master', found: 15, sightings: 1 },
+  ]);
+  assert.equal(plan1[0].changes.playstyle, undefined); // never overwrite the user's choice
+
+  const noStyle = [{ id: 'y', name: 'Marco Rossi', position: 'ST', age: 19, quality: 84, attrs: {} }];
+  const plan2 = planSquadChanges(noStyle, [
+    { name: 'Marco Rossi', age: 19, quality: 84, attrs: {}, playstyle: 'poacher', found: 15, sightings: 1 },
+  ]);
+  assert.equal(plan2[0].type, 'update');
+  assert.equal(plan2[0].changes.playstyle, 'poacher');
+  assert.equal(plan2[0].changes.playstyleLevel, 'Basic'); // level unknown → Basic
+});
+
 test('mergeSightings: unions abilities seen across a player’s frames', () => {
   const skills = parsePlayerText(CLEAN_PROFILE); // no abilities on the skills tab
   const abilityScreen = {

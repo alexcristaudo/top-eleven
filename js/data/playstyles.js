@@ -100,3 +100,51 @@ export const PLAYSTYLES = [
 export function playstylesForPosition(pos) {
   return PLAYSTYLES.filter((s) => s.positions.includes(pos));
 }
+
+export function playstyleLabel(id) {
+  const s = PLAYSTYLES.find((x) => x.id === id);
+  return s ? s.label : id;
+}
+
+// OCR-tolerant patterns keyed on each playstyle's distinctive words. Ordered so
+// the more specific pair-members are matched (and CONSUMED) before their
+// siblings: Ball-Playing GK before Ball-Playing Defender, Box-to-Box before Box
+// Commander. Patterns avoid attribute/header words — e.g. the "Positioning"
+// attribute and the "GOALKEEPING" header never trigger a match.
+const PLAYSTYLE_PATTERNS = [
+  { id: 'ball-playing-gk',       re: /ba[l1]{2}[\s.-]*p[l1]ay\w*\s*(?:gk|keep|goal)/ },
+  { id: 'ball-playing-defender', re: /ba[l1]{2}[\s.-]*p[l1]ay\w*\s*def/ },
+  { id: 'box-to-box',            re: /box[\s.-]*to[\s.-]*box|\bb2b\b/ },
+  { id: 'box-commander',         re: /box\s*command|\bcommander\b/ },
+  { id: 'sweeper-keeper',        re: /sw[e3]{2}per/ },
+  { id: 'attacking-fullback',    re: /attack\w*\s*fu[l1]{2}/ },
+  { id: 'false-nine',            re: /fa[l1]se\s*(?:nine|9)/ },
+  { id: 'target-man',            re: /targ[e3]t[\s.-]*man/ },
+  { id: 'winger-playstyle',      re: /w[il1]ng[e3]r/ },
+  { id: 'regista',               re: /r[e3]g[il1]sta/ },
+  { id: 'poacher',               re: /p[o0]ach/ },
+];
+
+// Scan full OCR text for the playstyles named on it, in canonical order.
+export function detectPlaystyles(text) {
+  if (!text) return [];
+  let t = String(text).toLowerCase();
+  const ids = new Set();
+  for (const { id, re } of PLAYSTYLE_PATTERNS) {
+    const g = new RegExp(re.source, 'g');
+    if (g.test(t)) {
+      ids.add(id);
+      t = t.replace(new RegExp(re.source, 'g'), ' '); // consume so a broader sibling can't re-match
+    }
+  }
+  return PLAYSTYLES.filter((s) => ids.has(s.id)).map((s) => s.id);
+}
+
+// The playstyle level named on the screen, but only when exactly one level word
+// is present — a "how to level up" list mentioning all three is ambiguous, so
+// we return null rather than guess.
+export function detectPlaystyleLevel(text) {
+  const t = String(text || '').toLowerCase();
+  const found = ['Master', 'Advanced', 'Basic'].filter((l) => new RegExp(`\\b${l.toLowerCase()}\\b`).test(t));
+  return found.length === 1 ? found[0] : null;
+}
