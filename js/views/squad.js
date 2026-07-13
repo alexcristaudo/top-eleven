@@ -4,7 +4,7 @@ import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes.js';
 import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
 import { SPECIAL_ABILITIES, abilityLabel, abilityIdsOf } from '../data/abilities.js';
-import { PLAYSTYLES, PLAYSTYLE_LEVELS } from '../data/playstyles.js';
+import { PLAYSTYLES, PLAYSTYLE_LEVELS, playstyleLabel } from '../data/playstyles.js';
 import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
 
@@ -227,6 +227,10 @@ export function renderSquad(view) {
       if (result.quality) draft.quality = result.quality;
       if (result.position) draft.position = result.position;
       if (result.specialAbilities?.length) draft.specialAbilities = result.specialAbilities;
+      if (result.playstyle) {
+        draft.playstyle = result.playstyle;
+        draft.playstyleLevel = result.playstyleLevel || 'Basic';
+      }
       drawEditor(null, draft);
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
@@ -337,7 +341,7 @@ export function renderSquad(view) {
               ? `<span class="chip blue">Update ${esc(item.player.name)}</span>`
               : `<span class="chip">No changes — ${esc(item.player.name)}</span>`;
           const changed = item.type === 'update'
-            ? Object.keys(item.changes.attrs || {}).length + (item.changes.age ? 1 : 0) + (item.changes.quality ? 1 : 0) + (item.changes.addedAbilities?.length || 0)
+            ? Object.keys(item.changes.attrs || {}).length + (item.changes.age ? 1 : 0) + (item.changes.quality ? 1 : 0) + (item.changes.addedAbilities?.length || 0) + (item.changes.playstyle ? 1 : 0)
             : 0;
           return `
             <div class="divider"></div>
@@ -350,6 +354,7 @@ export function renderSquad(view) {
                 ${s.age ? `<span class="chip">age ${esc(s.age)}</span>` : ''}
                 ${s.quality ? `<span class="chip">${esc(s.quality)}%</span>` : ''}
                 ${(s.specialAbilities || []).map((id) => `<span class="chip blue">${esc(abilityLabel(id))}</span>`).join('')}
+                ${s.playstyle ? `<span class="chip green">${esc(playstyleLabel(s.playstyle))}${s.playstyleLevel ? ' · ' + esc(s.playstyleLevel) : ''}</span>` : ''}
                 ${item.type === 'update' ? `<span class="chip yellow">${changed} field${changed === 1 ? '' : 's'} changed</span>` : ''}
               </span>
             </label>
@@ -386,6 +391,8 @@ export function renderSquad(view) {
             age: item.sighting.age || 18,
             quality: item.sighting.quality || 0,
             specialAbilities: item.sighting.specialAbilities || [],
+            playstyle: item.sighting.playstyle || null,
+            playstyleLevel: item.sighting.playstyle ? (item.sighting.playstyleLevel || 'Basic') : 'None',
             attrs: item.sighting.attrs,
           });
           added++;
@@ -397,6 +404,10 @@ export function renderSquad(view) {
           if (item.changes.addedAbilities?.length) {
             p.specialAbilities = [...abilityIdsOf(item.player), ...item.changes.addedAbilities];
             p.specialAbility = null;
+          }
+          if (item.changes.playstyle) {
+            p.playstyle = item.changes.playstyle;
+            if (item.changes.playstyleLevel) p.playstyleLevel = item.changes.playstyleLevel;
           }
           upsertPlayer(p);
           updated++;

@@ -3,6 +3,7 @@
 import { ATTR_KEYS, GK_ATTR_KEYS } from '../data/attributes.js';
 import { POSITIONS } from '../data/roles.js';
 import { detectAbilities, abilityIdsOf } from '../data/abilities.js';
+import { detectPlaystyles, detectPlaystyleLevel } from '../data/playstyles.js';
 
 // Fuzzy label stems — OCR often mangles word endings, so match on the start.
 // Shared by outfield and GK parses.
@@ -142,6 +143,11 @@ export function parsePlayerText(text) {
   const specialAbilities = detectAbilities(joined);
   if (!specialAbility && specialAbilities.length) specialAbility = specialAbilities[0];
 
+  // Playstyle: this app tracks one active playstyle + level, so take the first
+  // named on the screen and its level when the screen shows exactly one.
+  const playstyle = detectPlaystyles(joined)[0] || null;
+  const playstyleLevel = playstyle ? detectPlaystyleLevel(joined) : null;
+
   // Name: a "Firstname Lastname"-shaped line near the top that isn't UI text.
   // Unicode-aware (Cuscunà, Müller, …); tolerates a stray shirt number.
   const UI_WORDS = /profile|player|skills|attack|defen[cs]e|physical|mental|value|contract|bid|quality|form|age|team|roles|overview|playstyle|stats|celebrat|trainer|injur|morale|condition|special|ability|squad|lineup|formation|tactic|tier|very|good|happy|weight|height|foot/i;
@@ -169,7 +175,7 @@ export function parsePlayerText(text) {
     quality = Math.round(values.reduce((s, v) => s + v, 0) / values.length);
   }
 
-  return { attrs, age, quality, name, position, specialAbility, specialAbilities, found: values.length };
+  return { attrs, age, quality, name, position, specialAbility, specialAbilities, playstyle, playstyleLevel, found: values.length };
 }
 
 // ---------- Recording support: merge frame parses into distinct players ----------
@@ -242,6 +248,9 @@ function mergeInto(target, p) {
   for (const id of p.specialAbilities || []) {
     if (!target.specialAbilities.includes(id)) target.specialAbilities.push(id);
   }
+  // Playstyle name and its level may sit on different frames — adopt each once.
+  if (!target.playstyle && p.playstyle) target.playstyle = p.playstyle;
+  if (!target.playstyleLevel && p.playstyleLevel) target.playstyleLevel = p.playstyleLevel;
   for (const [k, v] of Object.entries(p.attrs)) {
     if (target.attrs[k] === undefined) target.attrs[k] = v;
   }
@@ -274,6 +283,8 @@ export function mergeSightings(parses, minFound = 6) {
         name: p.name, age: p.age, quality: p.quality, position: p.position,
         specialAbility: p.specialAbility || null,
         specialAbilities: [...(p.specialAbilities || [])],
+        playstyle: p.playstyle || null,
+        playstyleLevel: p.playstyleLevel || null,
         attrs: { ...p.attrs }, found: p.found, sightings: 1,
       };
       if (!entry.name && lastHeader
@@ -320,6 +331,12 @@ export function planSquadChanges(existingPlayers, merged) {
     const have = abilityIdsOf(match);
     const addedAbilities = (m.specialAbilities || []).filter((id) => !have.includes(id));
     if (addedAbilities.length) changes.addedAbilities = addedAbilities;
+    // Fill in a playstyle only when the player doesn't already have one — never
+    // silently overwrite a playstyle the user set.
+    if (m.playstyle && !match.playstyle) {
+      changes.playstyle = m.playstyle;
+      changes.playstyleLevel = m.playstyleLevel || 'Basic';
+    }
     const type = Object.keys(changes).length ? 'update' : 'unchanged';
     return { type, player: match, sighting: m, changes };
   });
