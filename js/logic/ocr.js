@@ -342,6 +342,26 @@ export function planSquadChanges(existingPlayers, merged) {
   });
 }
 
+// Build the editor prefill for applying a screenshot result to an EXISTING
+// player: new readings override old values, unread fields keep theirs, the
+// player's name/position are kept (OCR variants of the name are junk once the
+// user has picked the target), abilities are unioned, and a playstyle is only
+// adopted when the player has none.
+export function screenshotUpdateDraft(player, result) {
+  const draft = { attrs: { ...(player.attrs || {}), ...(result.attrs || {}) } };
+  if (result.age) draft.age = result.age;
+  if (result.quality) draft.quality = result.quality;
+  if (result.specialAbilities?.length) {
+    const have = abilityIdsOf(player);
+    draft.specialAbilities = [...have, ...result.specialAbilities.filter((id) => !have.includes(id))];
+  }
+  if (result.playstyle && !player.playstyle) {
+    draft.playstyle = result.playstyle;
+    draft.playstyleLevel = result.playstyleLevel || 'Basic';
+  }
+  return draft;
+}
+
 // ---------- Browser-side recognition (lazy-loads the bundled engine) ----------
 
 let tesseractLoad = null;
