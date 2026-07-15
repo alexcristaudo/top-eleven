@@ -1,7 +1,7 @@
 // parsePlayerText: turning noisy OCR output into a player draft.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlayerText, mergeSightings, planSquadChanges, sameName } from '../js/logic/ocr.js';
+import { parsePlayerText, mergeSightings, planSquadChanges, sameName, screenshotUpdateDraft } from '../js/logic/ocr.js';
 import { detectAbilities } from '../js/data/abilities.js';
 
 const CLEAN_PROFILE = `
@@ -295,6 +295,39 @@ test('mergeSightings: folds name-variant entries in a final dedupe pass', () => 
   const konyuy = merged.find((m) => m.name === 'Raoul Konyuy'); // cleaner variant kept
   assert.ok(konyuy, `expected clean name, got ${merged.map((m) => m.name)}`);
   assert.equal(konyuy.sightings, 2);
+});
+
+test('screenshotUpdateDraft: new readings override, unread fields survive', () => {
+  const player = {
+    id: 'x', name: 'Marco Rossi', position: 'ST', age: 19, quality: 84,
+    attrs: { finishing: 80, speed: 85, tackling: 40 },
+    specialAbilities: ['free-kick'], playstyle: 'target-man', playstyleLevel: 'Advanced',
+  };
+  const result = {
+    name: 'Marco Rossi', position: 'AMC', age: 20, quality: 88,
+    attrs: { finishing: 86, speed: 90 }, // tackling not read this time
+    specialAbilities: ['free-kick', 'penalty'],
+    playstyle: 'poacher', playstyleLevel: 'Basic',
+  };
+  const d = screenshotUpdateDraft(player, result);
+  assert.equal(d.age, 20);
+  assert.equal(d.quality, 88);
+  assert.equal(d.attrs.finishing, 86);   // new reading wins
+  assert.equal(d.attrs.tackling, 40);    // unread skill keeps its saved value
+  assert.deepEqual(d.specialAbilities, ['free-kick', 'penalty']); // union, no dupes
+  assert.equal(d.playstyle, undefined);  // player already has one — never overwritten
+  assert.equal(d.name, undefined);       // name/position stay the player's own
+  assert.equal(d.position, undefined);
+});
+
+test('screenshotUpdateDraft: adopts playstyle only when the player has none', () => {
+  const bare = { id: 'y', name: 'B', position: 'MC', attrs: {} };
+  const d = screenshotUpdateDraft(bare, { attrs: {}, playstyle: 'regista', playstyleLevel: null });
+  assert.equal(d.playstyle, 'regista');
+  assert.equal(d.playstyleLevel, 'Basic');
+  // Missing age/quality in the reading leave no override behind.
+  assert.equal(d.age, undefined);
+  assert.equal(d.quality, undefined);
 });
 
 test('planSquadChanges: a newly seen ability becomes an update', () => {

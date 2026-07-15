@@ -5,7 +5,7 @@ import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes
 import { fastTrainerRating, saCoverage, archetypeRating, growthReport } from '../logic/analysis.js';
 import { SPECIAL_ABILITIES, abilityLabel, abilityIdsOf } from '../data/abilities.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS, playstyleLabel } from '../data/playstyles.js';
-import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
+import { recognizeScreenshot, processRecording, planSquadChanges, sameName, screenshotUpdateDraft } from '../logic/ocr.js';
 import { esc, posBadge } from './ui.js';
 
 export function renderSquad(view) {
@@ -126,9 +126,14 @@ export function renderSquad(view) {
   }
 
   function drawEditor(player, draft = null) {
-    const p = player || {
-      id: newId(), name: '', position: 'MC', altPositions: [], age: 18, quality: 20, attrs: {},
+    // A draft overlays whichever base it's given: the blank template (add
+    // flow) or an existing player (screenshot-update flow) — attrs merge so
+    // unread skills keep their saved values.
+    const base = player || { id: newId(), name: '', position: 'MC', altPositions: [], age: 18, quality: 20, attrs: {} };
+    const p = {
+      ...base,
       ...(draft || {}),
+      attrs: { ...(base.attrs || {}), ...((draft || {}).attrs || {}) },
     };
     const isNew = !player;
     editorEl.innerHTML = `
@@ -243,19 +248,54 @@ export function renderSquad(view) {
         return;
       }
       const missing = 15 - result.found;
-      scanStatus.innerHTML = `<div class="note">✅ Recognised ${result.found}/15 attributes${result.age ? ', age' : ''}${result.quality ? ', quality' : ''}${result.name ? ', name' : ''}.
+      const summary = `<div class="note">✅ Recognised ${result.found}/15 attributes${result.age ? ', age' : ''}${result.quality ? ', quality' : ''}${result.name ? ', name' : ''}.
         ${missing > 0 || !result.age || !result.name ? ' Review the form below and fill any gaps before saving.' : ' Review and save.'}</div>`;
-      const draft = { attrs: result.attrs };
-      if (result.name) draft.name = result.name;
-      if (result.age) draft.age = result.age;
-      if (result.quality) draft.quality = result.quality;
-      if (result.position) draft.position = result.position;
-      if (result.specialAbilities?.length) draft.specialAbilities = result.specialAbilities;
+      const addDraft = { attrs: result.attrs };
+      if (result.name) addDraft.name = result.name;
+      if (result.age) addDraft.age = result.age;
+      if (result.quality) addDraft.quality = result.quality;
+      if (result.position) addDraft.position = result.position;
+      if (result.specialAbilities?.length) addDraft.specialAbilities = result.specialAbilities;
       if (result.playstyle) {
-        draft.playstyle = result.playstyle;
-        draft.playstyleLevel = result.playstyleLevel || 'Basic';
+        addDraft.playstyle = result.playstyle;
+        addDraft.playstyleLevel = result.playstyleLevel || 'Basic';
       }
-      drawEditor(null, draft);
+      const players = getPlayers();
+      if (!players.length) {
+        scanStatus.innerHTML = summary;
+        drawEditor(null, addDraft);
+        return;
+      }
+      // Let the user apply the reading to an existing player instead of
+      // creating a duplicate. A fuzzy name match picks the likely target.
+      const match = result.name ? players.find((x) => sameName(x.name, result.name)) : null;
+      scanStatus.innerHTML = `${summary}
+        <div class="card">
+          <h3>Apply to…</h3>
+          ${match ? `<p class="hint">Looks like <strong>${esc(match.name)}</strong> is already in your squad.</p>` : ''}
+          <div class="field-row">
+            <label class="field"><span>Existing player</span>
+              <select id="scan-target">
+                ${players.map((x) => `<option value="${esc(x.id)}" ${match && x.id === match.id ? 'selected' : ''}>${esc(x.name)} (${esc(x.position)})</option>`).join('')}
+              </select>
+            </label>
+          </div>
+          <div class="btn-row">
+            <button class="btn ${match ? '' : 'secondary'}" id="scan-update">↻ Update selected player</button>
+            <button class="btn ${match ? 'secondary' : ''}" id="scan-add">＋ Add as new player</button>
+          </div>
+          <p class="hint">Update keeps the player's name and fills in the newly read values — skills the OCR missed keep their saved numbers.</p>
+        </div>`;
+      scanStatus.querySelector('#scan-add').addEventListener('click', () => {
+        scanStatus.innerHTML = summary;
+        drawEditor(null, addDraft);
+      });
+      scanStatus.querySelector('#scan-update').addEventListener('click', () => {
+        const target = getPlayers().find((x) => x.id === scanStatus.querySelector('#scan-target').value);
+        if (!target) return;
+        scanStatus.innerHTML = summary;
+        drawEditor(target, screenshotUpdateDraft(target, result));
+      });
     } catch (e) {
       scanStatus.innerHTML = `<div class="warn-note">Screenshot import failed: ${esc(e.message)}. You can still add the player manually.</div>`;
     }
