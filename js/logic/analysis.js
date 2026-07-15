@@ -326,6 +326,50 @@ export function saCoverage(players) {
   });
 }
 
+// ---------- Development tracking (growth over time) ----------
+
+// Turn a player's snapshot history into a growth report: quality trend, the
+// velocity of change (recent + overall), and the attributes that moved most.
+// Returns null when there aren't yet two snapshots to compare.
+export function growthReport(history) {
+  const h = (history || [])
+    .filter((s) => s && Number.isFinite(s.t))
+    .sort((a, b) => a.t - b.t);
+  if (h.length < 2) return null;
+  const DAY = 86400000;
+  const first = h[0];
+  const last = h[h.length - 1];
+  const spanDays = Math.max(0.5, (last.t - first.t) / DAY);
+  const perWeek = ((last.quality || 0) - (first.quality || 0)) / spanDays * 7;
+  // A trailing 28-day window is robust to an old season reset skewing the span.
+  const cutoff = last.t - 28 * DAY;
+  const recentStart = h.find((s) => s.t >= cutoff) || first;
+  const recentDays = Math.max(0.5, (last.t - recentStart.t) / DAY);
+  const recentPerWeek = ((last.quality || 0) - (recentStart.quality || 0)) / recentDays * 7;
+
+  const keys = new Set([...Object.keys(first.attrs || {}), ...Object.keys(last.attrs || {})]);
+  const movers = [];
+  for (const k of keys) {
+    const a = (first.attrs || {})[k];
+    const b = (last.attrs || {})[k];
+    if (Number.isFinite(a) && Number.isFinite(b) && b !== a) movers.push({ key: k, from: a, to: b, delta: b - a });
+  }
+  movers.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
+
+  return {
+    snapshots: h.length,
+    spanDays: Math.round(spanDays),
+    from: first.quality || 0,
+    to: last.quality || 0,
+    dQuality: (last.quality || 0) - (first.quality || 0),
+    perWeek,
+    recentPerWeek,
+    movers,
+    totalGain: movers.reduce((s, m) => s + Math.max(0, m.delta), 0),
+    series: h.map((s) => s.quality || 0),
+  };
+}
+
 // ---------- Tactics ----------
 
 export function counterOptions(opponentFormationId) {

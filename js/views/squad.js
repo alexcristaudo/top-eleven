@@ -1,8 +1,8 @@
 // Squad tracker: list, add/edit form, export/import.
-import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad, seasonRollover } from '../store.js';
+import { getPlayers, upsertPlayer, deletePlayer, newId, exportSquad, importSquad, seasonRollover, getHistory } from '../store.js';
 import { POSITIONS } from '../data/roles.js';
 import { ATTRIBUTES, GROUPS, attributesFor, groupsFor } from '../data/attributes.js';
-import { fastTrainerRating, saCoverage, archetypeRating } from '../logic/analysis.js';
+import { fastTrainerRating, saCoverage, archetypeRating, growthReport } from '../logic/analysis.js';
 import { SPECIAL_ABILITIES, abilityLabel, abilityIdsOf } from '../data/abilities.js';
 import { PLAYSTYLES, PLAYSTYLE_LEVELS, playstyleLabel } from '../data/playstyles.js';
 import { recognizeScreenshot, processRecording, planSquadChanges } from '../logic/ocr.js';
@@ -27,6 +27,7 @@ export function renderSquad(view) {
     <div id="scan-status"></div>
     <div id="video-review"></div>
     <div id="editor"></div>
+    <div id="risers-card"></div>
     <div id="sa-coverage"></div>
     <div id="compare-card"></div>
   `;
@@ -68,7 +69,30 @@ export function renderSquad(view) {
       });
     }
     drawCompare();
+    drawRisers();
     drawSaCoverage();
+  }
+
+  const risersEl = view.querySelector('#risers-card');
+  function drawRisers() {
+    const rows = getPlayers()
+      .map((p) => ({ p, g: growthReport(getHistory(p.id)) }))
+      .filter((r) => r.g)
+      .map((r) => ({ name: r.p.name, id: r.p.id, rate: r.g.recentPerWeek, d: r.g.dQuality }))
+      .filter((r) => Math.abs(r.rate) > 0.01 || r.d !== 0)
+      .sort((a, b) => b.rate - a.rate);
+    if (!rows.length) { risersEl.innerHTML = ''; return; }
+    const sign = (n) => (n >= 0 ? '+' : '') + n;
+    const risers = rows.filter((r) => r.rate > 0.05).slice(0, 5);
+    const fallers = rows.filter((r) => r.rate < -0.05).reverse().slice(0, 3);
+    const chip = (r) => `<a class="chip ${r.rate >= 0 ? 'green' : 'red'}" href="#/player/${esc(r.id)}">${esc(r.name)} ${sign(+r.rate.toFixed(1))}%/wk</a>`;
+    risersEl.innerHTML = `
+      <div class="card">
+        <h3>Squad development</h3>
+        <p class="hint">Quality change per week, measured from your imports over time. Re-import from a recording periodically to keep this live.</p>
+        ${risers.length ? `<p><strong>Rising:</strong> ${risers.map(chip).join(' ')}</p>` : '<p class="hint">No clear risers yet — needs a couple of imports spread over time.</p>'}
+        ${fallers.length ? `<p><strong>Slipping:</strong> ${fallers.map(chip).join(' ')} <span class="hint">(a season −20 reset shows here too)</span></p>` : ''}
+      </div>`;
   }
 
   const saEl = view.querySelector('#sa-coverage');

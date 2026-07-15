@@ -10,7 +10,7 @@ globalThis.localStorage = {
   removeItem: (k) => mem.delete(k),
 };
 
-const { getPlayers, upsertPlayer, seasonRollover, importSquad } = await import('../js/store.js');
+const { getPlayers, upsertPlayer, deletePlayer, seasonRollover, exportSquad, importSquad, recordSnapshot, getHistory } = await import('../js/store.js');
 
 test('seasonRollover: drops quality AND attributes by 20, floors at 1', () => {
   mem.clear();
@@ -40,4 +40,39 @@ test('seasonRollover: custom amount applies to quality and attributes', () => {
   const x = getPlayers()[0];
   assert.equal(x.quality, 90);
   assert.equal(x.attrs.passing, 78);
+});
+
+test('recordSnapshot: appends only when quality or an attribute moved', () => {
+  mem.clear();
+  const base = { id: 'h', name: 'H', position: 'ST', quality: 70, age: 19, attrs: { finishing: 60 } };
+  recordSnapshot(base, 1000);
+  recordSnapshot(base, 2000);                         // unchanged → ignored
+  recordSnapshot({ ...base, quality: 72 }, 3000);     // quality moved → recorded
+  recordSnapshot({ ...base, quality: 72, attrs: { finishing: 63 } }, 4000); // attr moved
+  const h = getHistory('h');
+  assert.equal(h.length, 3);
+  assert.deepEqual(h.map((s) => s.quality), [70, 72, 72]);
+  assert.equal(h[2].attrs.finishing, 63);
+});
+
+test('upsertPlayer records history; deletePlayer clears it', () => {
+  mem.clear();
+  upsertPlayer({ id: 'p', name: 'P', position: 'MC', quality: 80, age: 20, attrs: { passing: 70 } });
+  upsertPlayer({ id: 'p', name: 'P', position: 'MC', quality: 82, age: 20, attrs: { passing: 73 } });
+  assert.equal(getHistory('p').length, 2);
+  deletePlayer('p');
+  assert.equal(getHistory('p').length, 0);
+});
+
+test('export/import round-trips history', () => {
+  mem.clear();
+  upsertPlayer({ id: 'q', name: 'Q', position: 'MC', quality: 80, age: 20, attrs: {} });
+  upsertPlayer({ id: 'q', name: 'Q', position: 'MC', quality: 85, age: 20, attrs: {} });
+  const before = getHistory('q');
+  assert.equal(before.length, 2);
+  const json = exportSquad();
+  mem.clear();
+  assert.equal(getHistory('q').length, 0);
+  importSquad(json);
+  assert.deepEqual(getHistory('q').map((s) => s.quality), before.map((s) => s.quality));
 });

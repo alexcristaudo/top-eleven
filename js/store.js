@@ -29,11 +29,63 @@ export function upsertPlayer(player) {
   if (i >= 0) players[i] = player;
   else players.push(player);
   save(players);
+  recordSnapshot(player); // capture quality/attrs growth over time
   return player;
 }
 
 export function deletePlayer(id) {
   save(load().filter((p) => p.id !== id));
+  const h = loadHistory();
+  if (h[id]) { delete h[id]; saveHistory(h); }
+}
+
+// ---------- Progress history: quality/attribute snapshots over time ----------
+// Every meaningful player change (edit, screenshot/recording import) appends a
+// timestamped snapshot — but only when a value actually moved — so the app can
+// show real development velocity instead of just the latest numbers. Season
+// rollover and JSON import write through save() directly, so they don't spam
+// history with their bulk rewrites.
+const HISTORY_KEY = 'te-manager.history.v1';
+const HISTORY_CAP = 120; // per player; oldest trimmed beyond this
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    return data && typeof data === 'object' ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveHistory(h) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+}
+
+function snapshotMoved(prev, player) {
+  if (!prev) return true;
+  if ((prev.quality || 0) !== (player.quality || 0)) return true;
+  const pa = prev.attrs || {};
+  const na = player.attrs || {};
+  const keys = new Set([...Object.keys(pa), ...Object.keys(na)]);
+  for (const k of keys) if (pa[k] !== na[k]) return true;
+  return false;
+}
+
+export function recordSnapshot(player, when = Date.now()) {
+  if (!player || !player.id) return;
+  const h = loadHistory();
+  const list = h[player.id] || [];
+  const prev = list[list.length - 1];
+  if (!snapshotMoved(prev, player)) return;
+  list.push({ t: when, quality: player.quality || 0, attrs: { ...(player.attrs || {}) } });
+  if (list.length > HISTORY_CAP) list.splice(0, list.length - HISTORY_CAP);
+  h[player.id] = list;
+  saveHistory(h);
+}
+
+export function getHistory(id) {
+  return loadHistory()[id] || [];
 }
 
 // Season rollover: quality re-scales down against the new (higher) league
@@ -91,6 +143,7 @@ export function exportSquad() {
     scout: getData('scout', []),
     checklist: getData('checklist', {}),
     tokens: getData('tokens', []),
+    history: loadHistory(),
   }, null, 2);
 }
 
@@ -108,5 +161,6 @@ export function importSquad(json) {
   if (Array.isArray(data.scout)) setData('scout', data.scout);
   if (data.checklist && typeof data.checklist === 'object') setData('checklist', data.checklist);
   if (Array.isArray(data.tokens)) setData('tokens', data.tokens);
+  if (data.history && typeof data.history === 'object') saveHistory(data.history);
   return players.length;
 }
