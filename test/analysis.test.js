@@ -7,7 +7,7 @@ import {
   recommendDrills, needsFromWeaknesses, needsForPosition,
   developmentPlan, counterOptions, squadFitForFormation,
   bestXI, conditionPlan, rankFormations, bidValuation, positionNeed,
-  powerTrainingReport, archetypeRating,
+  powerTrainingReport, archetypeRating, growthReport,
 } from '../js/logic/analysis.js';
 import { getFormation } from '../js/data/formations.js';
 
@@ -319,4 +319,38 @@ test('developmentPlan session is biased toward power stats', () => {
   // At least one of the striker's key stats must be in the recommended session.
   assert.ok(['finishing', 'speed', 'shooting'].some((k) => trained.has(k)),
     `session trains ${[...trained]}`);
+});
+
+test('growthReport: computes weekly velocity and biggest movers', () => {
+  const DAY = 86400000;
+  assert.equal(growthReport([]), null);
+  assert.equal(growthReport([{ t: 0, quality: 80, attrs: {} }]), null); // needs 2+
+  const now = 100 * DAY;
+  const g = growthReport([
+    { t: now - 14 * DAY, quality: 80, attrs: { finishing: 60, speed: 70 } },
+    { t: now, quality: 86, attrs: { finishing: 68, speed: 71 } },
+  ]);
+  assert.equal(g.from, 80);
+  assert.equal(g.to, 86);
+  assert.equal(g.dQuality, 6);
+  assert.equal(g.spanDays, 14);
+  assert.equal(Math.round(g.perWeek), 3);        // +6 over 14 days ≈ 3/week
+  assert.equal(Math.round(g.recentPerWeek), 3);  // whole span is within 28 days
+  assert.equal(g.movers[0].key, 'finishing');    // +8 is the biggest move
+  assert.equal(g.movers[0].delta, 8);
+  assert.equal(g.totalGain, 9);                  // 8 + 1
+  assert.deepEqual(g.series, [80, 86]);
+});
+
+test('growthReport: recent window ignores an old pre-reset span', () => {
+  const DAY = 86400000;
+  const now = 200 * DAY;
+  // A big drop 60 days ago (season reset), then steady climb since.
+  const g = growthReport([
+    { t: now - 60 * DAY, quality: 100, attrs: {} },
+    { t: now - 20 * DAY, quality: 80, attrs: {} },
+    { t: now, quality: 88, attrs: {} },
+  ]);
+  assert.ok(g.perWeek < 0, 'overall span still reflects the reset');
+  assert.ok(g.recentPerWeek > 0, 'recent 28-day window shows the climb');
 });

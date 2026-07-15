@@ -1,13 +1,13 @@
 // Per-player development page: verdict, weaknesses, drill session, role fit.
-import { getPlayer, getPlayers, upsertPlayer, deletePlayer } from '../store.js';
+import { getPlayer, getPlayers, upsertPlayer, deletePlayer, getHistory } from '../store.js';
 import { ROLES } from '../data/roles.js';
-import { developmentPlan, roleFit, attrLabel, classifyTrainerTest, powerTrainingReport, archetypeRating } from '../logic/analysis.js';
+import { developmentPlan, roleFit, attrLabel, classifyTrainerTest, powerTrainingReport, archetypeRating, growthReport } from '../logic/analysis.js';
 import { POWER_TRAINING_NOTE } from '../data/powerstats.js';
 import { RECOMMENDED_TESTS, MIN_TESTS_FOR_VERDICT, TEST_AGE_NOTE } from '../data/trainertest.js';
 import { PLAYSTYLES, playstylesForPosition } from '../data/playstyles.js';
 import { abilityLabel, abilityIdsOf } from '../data/abilities.js';
 import { DRILLS } from '../data/drills.js';
-import { esc, posBadge, meterRow } from './ui.js';
+import { esc, posBadge, meterRow, sparkline } from './ui.js';
 
 export function renderPlayer(view, id) {
   const p = getPlayer(id);
@@ -56,6 +56,39 @@ export function renderPlayer(view, id) {
       <p>${esc(plan.verdict.advice)}</p>
       <p class="hint">${esc(plan.fastTrainer.note)}${plan.fastTrainer.tested ? '' : ' Age is only a rough proxy — run the fast-trainer test below for the real answer.'}</p>
     </div>
+
+    ${(() => {
+      const g = growthReport(getHistory(p.id));
+      if (!g) {
+        return `
+    <div class="card">
+      <h3>Development tracker</h3>
+      <p class="hint">No progress recorded yet. Each time an import or edit changes this player's numbers, the app snapshots them — re-import your squad from a recording periodically and their growth curve, weekly rate and biggest-moving skills appear here.</p>
+    </div>`;
+      }
+      const qDir = g.dQuality > 0 ? 'green' : g.dQuality < 0 ? 'red' : '';
+      const recentDir = g.recentPerWeek > 0.05 ? 'green' : g.recentPerWeek < -0.05 ? 'red' : '';
+      const sign = (n) => (n >= 0 ? '+' : '') + n;
+      const trend = g.recentPerWeek > 0.05
+        ? 'Rising — keep the training on them.'
+        : g.recentPerWeek < -0.05
+          ? 'Recently down (a season −20 reset shows up here too).'
+          : 'Flat lately — nudge them with power-training or matches.';
+      return `
+    <div class="card">
+      <h3>Development tracker</h3>
+      <p><span class="chip ${qDir}">${sign(g.dQuality)}% quality</span>
+         <span class="chip">${esc(g.from)}% → ${esc(g.to)}%</span>
+         <span class="chip">over ${g.spanDays} day${g.spanDays === 1 ? '' : 's'}</span></p>
+      ${sparkline(g.series)}
+      <p><span class="chip ${recentDir}">${sign(+g.recentPerWeek.toFixed(1))}%/week recent</span>
+         <span class="chip">${sign(+g.perWeek.toFixed(1))}%/week overall</span></p>
+      ${g.movers.length ? `
+        <h4>Biggest movers</h4>
+        <p>${g.movers.slice(0, 8).map((m) => `<span class="chip ${m.delta > 0 ? 'green' : 'red'}">${esc(attrLabel(m.key))} ${sign(m.delta)}</span>`).join(' ')}</p>` : ''}
+      <p class="hint">From ${g.snapshots} snapshot${g.snapshots === 1 ? '' : 's'} of your imports/edits. ${trend}</p>
+    </div>`;
+    })()}
 
     <div class="card" id="ft-test-card">
       <h3>Fast-trainer test</h3>

@@ -294,6 +294,15 @@ label.sa-check {
 }
 label.sa-check input { width: 16px; height: 16px; flex: none; accent-color: var(--accent); }
 
+/* Development tracker sparkline */
+svg.spark { display: block; width: 100%; margin: 6px 0 4px; overflow: visible; }
+svg.spark polyline { stroke: var(--accent); }
+svg.spark circle { fill: var(--accent); stroke: none; }
+svg.spark.down polyline { stroke: #e5646e; }
+svg.spark.down circle { fill: #e5646e; }
+a.chip { text-decoration: none; }
+a.chip:hover { filter: brightness(1.12); }
+
 /* ---------- Misc ---------- */
 .empty {
   text-align: center; color: var(--muted); padding: 28px 12px; font-size: 13.5px;
