@@ -69,11 +69,11 @@ export function renderPlayer(view, id) {
       const qDir = g.dQuality > 0 ? 'green' : g.dQuality < 0 ? 'red' : '';
       const recentDir = g.recentPerWeek > 0.05 ? 'green' : g.recentPerWeek < -0.05 ? 'red' : '';
       const sign = (n) => (n >= 0 ? '+' : '') + n;
-      const trend = g.recentPerWeek > 0.05
+      const trend = g.dQuality > 0
         ? 'Rising — keep the training on them.'
-        : g.recentPerWeek < -0.05
-          ? 'Recently down (a season −20 reset shows up here too).'
-          : 'Flat lately — nudge them with power-training or matches.';
+        : g.dQuality < 0
+          ? 'Down since the first snapshot (a season −20 reset shows up here too).'
+          : 'Attributes moved but overall quality held — check the movers below.';
       return `
     <div class="card">
       <h3>Development tracker</h3>
@@ -81,8 +81,10 @@ export function renderPlayer(view, id) {
          <span class="chip">${esc(g.from)}% → ${esc(g.to)}%</span>
          <span class="chip">over ${g.spanDays} day${g.spanDays === 1 ? '' : 's'}</span></p>
       ${sparkline(g.series)}
-      <p><span class="chip ${recentDir}">${sign(+g.recentPerWeek.toFixed(1))}%/week recent</span>
-         <span class="chip">${sign(+g.perWeek.toFixed(1))}%/week overall</span></p>
+      ${g.rateReliable ? `
+        <p><span class="chip ${recentDir}">${sign(+g.recentPerWeek.toFixed(1))}%/week recent</span>
+           <span class="chip">${sign(+g.perWeek.toFixed(1))}%/week overall</span></p>`
+        : '<p class="hint">A per-week rate appears once your updates span a few days.</p>'}
       ${g.movers.length ? `
         <h4>Biggest movers</h4>
         <p>${g.movers.slice(0, 8).map((m) => `<span class="chip ${m.delta > 0 ? 'green' : 'red'}">${esc(attrLabel(m.key))} ${sign(m.delta)}</span>`).join(' ')}</p>` : ''}

@@ -64,6 +64,32 @@ test('upsertPlayer records history; deletePlayer clears it', () => {
   assert.equal(getHistory('p').length, 0);
 });
 
+test('upsertPlayer seeds a baseline for players that predate history', () => {
+  // Simulate a squad that existed before history tracking: written via the raw
+  // store with NO snapshots (mirrors JSON import / pre-v24 data).
+  mem.clear();
+  importSquad(JSON.stringify({ players: [
+    { id: 'old', name: 'Old', position: 'ST', quality: 80, age: 22, attrs: { finishing: 70 } },
+  ] }));
+  assert.equal(getHistory('old').length, 0); // import doesn't snapshot
+  // A single stat update must now yield TWO snapshots (baseline + new) so the
+  // tracker can plot growth immediately.
+  upsertPlayer({ id: 'old', name: 'Old', position: 'ST', quality: 83, age: 22, attrs: { finishing: 74 } });
+  const h = getHistory('old');
+  assert.equal(h.length, 2);
+  assert.deepEqual(h.map((s) => s.quality), [80, 83]); // old baseline, then new
+  assert.equal(h[0].attrs.finishing, 70);
+  assert.equal(h[1].attrs.finishing, 74);
+});
+
+test('upsertPlayer does not double-seed once history exists', () => {
+  mem.clear();
+  upsertPlayer({ id: 'n', name: 'N', position: 'MC', quality: 80, age: 20, attrs: {} }); // fresh add → 1 snapshot
+  upsertPlayer({ id: 'n', name: 'N', position: 'MC', quality: 82, age: 20, attrs: {} }); // update → 2
+  upsertPlayer({ id: 'n', name: 'N', position: 'MC', quality: 84, age: 20, attrs: {} }); // update → 3 (no extra baseline)
+  assert.equal(getHistory('n').length, 3);
+});
+
 test('export/import round-trips history', () => {
   mem.clear();
   upsertPlayer({ id: 'q', name: 'Q', position: 'MC', quality: 80, age: 20, attrs: {} });

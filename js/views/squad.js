@@ -77,20 +77,20 @@ export function renderSquad(view) {
   function drawRisers() {
     const rows = getPlayers()
       .map((p) => ({ p, g: growthReport(getHistory(p.id)) }))
-      .filter((r) => r.g)
-      .map((r) => ({ name: r.p.name, id: r.p.id, rate: r.g.recentPerWeek, d: r.g.dQuality }))
-      .filter((r) => Math.abs(r.rate) > 0.01 || r.d !== 0)
-      .sort((a, b) => b.rate - a.rate);
+      .filter((r) => r.g && r.g.dQuality !== 0)
+      .map((r) => ({ name: r.p.name, id: r.p.id, d: r.g.dQuality, rate: r.g.recentPerWeek, reliable: r.g.rateReliable }))
+      .sort((a, b) => b.d - a.d);
     if (!rows.length) { risersEl.innerHTML = ''; return; }
     const sign = (n) => (n >= 0 ? '+' : '') + n;
-    const risers = rows.filter((r) => r.rate > 0.05).slice(0, 5);
-    const fallers = rows.filter((r) => r.rate < -0.05).reverse().slice(0, 3);
-    const chip = (r) => `<a class="chip ${r.rate >= 0 ? 'green' : 'red'}" href="#/player/${esc(r.id)}">${esc(r.name)} ${sign(+r.rate.toFixed(1))}%/wk</a>`;
+    const risers = rows.filter((r) => r.d > 0).slice(0, 6);
+    const fallers = rows.filter((r) => r.d < 0).reverse().slice(0, 4);
+    // Show the total quality change; append a /week rate only once it's meaningful.
+    const chip = (r) => `<a class="chip ${r.d >= 0 ? 'green' : 'red'}" href="#/player/${esc(r.id)}">${esc(r.name)} ${sign(r.d)}%${r.reliable ? ` (${sign(+r.rate.toFixed(1))}/wk)` : ''}</a>`;
     risersEl.innerHTML = `
       <div class="card">
         <h3>Squad development</h3>
-        <p class="hint">Quality change per week, measured from your imports over time. Re-import from a recording periodically to keep this live.</p>
-        ${risers.length ? `<p><strong>Rising:</strong> ${risers.map(chip).join(' ')}</p>` : '<p class="hint">No clear risers yet — needs a couple of imports spread over time.</p>'}
+        <p class="hint">Quality change since each player's first tracked snapshot (with a per-week rate once your updates span a few days). Re-import from a recording periodically to keep this live.</p>
+        ${risers.length ? `<p><strong>Rising:</strong> ${risers.map(chip).join(' ')}</p>` : ''}
         ${fallers.length ? `<p><strong>Slipping:</strong> ${fallers.map(chip).join(' ')} <span class="hint">(a season −20 reset shows here too)</span></p>` : ''}
       </div>`;
   }

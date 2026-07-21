@@ -339,7 +339,8 @@ export function growthReport(history) {
   const DAY = 86400000;
   const first = h[0];
   const last = h[h.length - 1];
-  const spanDays = Math.max(0.5, (last.t - first.t) / DAY);
+  const rawSpanDays = (last.t - first.t) / DAY;
+  const spanDays = Math.max(0.5, rawSpanDays);
   const perWeek = ((last.quality || 0) - (first.quality || 0)) / spanDays * 7;
   // A trailing 28-day window is robust to an old season reset skewing the span.
   const cutoff = last.t - 28 * DAY;
@@ -364,6 +365,9 @@ export function growthReport(history) {
     dQuality: (last.quality || 0) - (first.quality || 0),
     perWeek,
     recentPerWeek,
+    // Per-week rates are only meaningful once the snapshots span real time —
+    // two updates in one session would otherwise annualise into silly numbers.
+    rateReliable: rawSpanDays >= 2,
     movers,
     totalGain: movers.reduce((s, m) => s + Math.max(0, m.delta), 0),
     series: h.map((s) => s.quality || 0),

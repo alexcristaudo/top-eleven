@@ -26,9 +26,17 @@ export function getPlayer(id) {
 export function upsertPlayer(player) {
   const players = load();
   const i = players.findIndex((p) => p.id === player.id);
+  const existing = i >= 0 ? players[i] : null;
   if (i >= 0) players[i] = player;
   else players.push(player);
   save(players);
+  // Seed a baseline from the pre-update stats the first time we touch a player
+  // that predates history tracking (or came in via JSON import, which bypasses
+  // snapshots). Without this, the very first stat update leaves just one
+  // snapshot — not enough to plot growth — so the tracker looked "broken".
+  if (existing && getHistory(player.id).length === 0) {
+    recordSnapshot(existing, Date.now() - 1000);
+  }
   recordSnapshot(player); // capture quality/attrs growth over time
   return player;
 }
