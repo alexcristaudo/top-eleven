@@ -340,6 +340,19 @@ test('growthReport: computes weekly velocity and biggest movers', () => {
   assert.equal(g.movers[0].delta, 8);
   assert.equal(g.totalGain, 9);                  // 8 + 1
   assert.deepEqual(g.series, [80, 86]);
+  assert.equal(g.rateReliable, true);            // 14-day span → weekly rate is meaningful
+});
+
+test('growthReport: shows the delta but flags an unreliable rate for same-session snapshots', () => {
+  // Two snapshots one second apart (a baseline seeded right before an update).
+  const now = 1_000_000_000_000;
+  const g = growthReport([
+    { t: now - 1000, quality: 80, attrs: { finishing: 60 } },
+    { t: now, quality: 83, attrs: { finishing: 65 } },
+  ]);
+  assert.equal(g.dQuality, 3);                   // the delta is still real and shown
+  assert.equal(g.movers[0].delta, 5);
+  assert.equal(g.rateReliable, false);           // but the /week rate is suppressed
 });
 
 test('growthReport: recent window ignores an old pre-reset span', () => {
